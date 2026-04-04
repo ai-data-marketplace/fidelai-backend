@@ -1,0 +1,11 @@
+django
+djangorestframework
+psycopg2-binary
+django-environ
+django-cors-headers
+django-filter
+celery
+redis
+pillow
+djangorestframework-simplejwt
+django-storages
