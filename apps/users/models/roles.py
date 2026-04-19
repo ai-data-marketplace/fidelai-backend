@@ -15,7 +15,7 @@ class TimeStampedModel(models.Model):
 class RoleChoices(models.TextChoices):
     CONTRIBUTOR = "contributor", "contributor"
     ANNOTATOR = "annotator", "annotator"
-    EXPERT = "expert", "expert reviewer"
+    EXPERT = "expert", "expert reviewer" 
     BUYER = "buyer", "buyer"
     ADMIN = "admin", "admin"
     UNKNOWN = "unknown", "unknown"

@@ -25,10 +25,27 @@ class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
     objects = CustomUserManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username", "full_name"]
+    REQUIRED_FIELDS = ["full_name"]
 
     class Meta:
         ordering = ("-date_joined",)
 
     def __str__(self):
         return self.email
+
+
+class EmailVerificationCode(TimeStampedModel):
+    user = models.ForeignKey("users.CustomUser", on_delete=models.CASCADE, related_name="verification_codes")
+    code = models.CharField(max_length=6)
+    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["user", "is_used"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    def __str__(self):
+        return f"EmailVerificationCode<{self.user.email}:{self.code}>"

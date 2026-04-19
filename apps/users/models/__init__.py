@@ -5,10 +5,11 @@ from .roles import (
     RoleChoices,
     TimeStampedModel,
 )
-from .user import CustomUser
+from .user import CustomUser, EmailVerificationCode
 
 __all__ = [
     "CustomUser",
+    "EmailVerificationCode",
     "RoleChoices",
     "RoleApplicationStatusChoices",
     "TimeStampedModel",
