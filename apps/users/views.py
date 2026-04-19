@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +19,7 @@ class RegisterView(APIView):
 	authentication_classes = []
 	permission_classes = []
 
+	@extend_schema(request=RegisterSerializer)
 	def post(self, request):
 		serializer = RegisterSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -40,6 +42,7 @@ class VerifyEmailView(APIView):
 	authentication_classes = []
 	permission_classes = []
 
+	@extend_schema(request=VerifyEmailSerializer)
 	def post(self, request):
 		serializer = VerifyEmailSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -56,6 +59,7 @@ class ResendCodeView(APIView):
 	authentication_classes = []
 	permission_classes = []
 
+	@extend_schema(request=ResendCodeSerializer)
 	def post(self, request):
 		serializer = ResendCodeSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -72,6 +76,7 @@ class LoginView(APIView):
 	authentication_classes = []
 	permission_classes = []
 
+	@extend_schema(request=LoginSerializer)
 	def post(self, request):
 		serializer = LoginSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -101,6 +106,7 @@ class ForgotPasswordView(APIView):
 	authentication_classes = []
 	permission_classes = []
 
+	@extend_schema(request=ForgotPasswordSerializer)
 	def post(self, request):
 		serializer = ForgotPasswordSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -117,6 +123,7 @@ class ResetPasswordView(APIView):
 	authentication_classes = []
 	permission_classes = []
 
+	@extend_schema(request=ResetPasswordSerializer)
 	def post(self, request):
 		serializer = ResetPasswordSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
