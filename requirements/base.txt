@@ -9,3 +9,4 @@ redis
 pillow
 djangorestframework-simplejwt
 django-storages
+drf-spectacular
