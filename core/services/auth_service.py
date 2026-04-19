@@ -68,7 +68,7 @@ class AuthService:
         existing_user = CustomUser.objects.filter(email__iexact=email).first()
         if existing_user:
             raise AuthServiceError(
-                "Unable to complete registration with the provided information.",
+                "A user with this email already exists.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 

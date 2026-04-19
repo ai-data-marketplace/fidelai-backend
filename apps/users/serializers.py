@@ -18,7 +18,7 @@ class RegisterSerializer(serializers.Serializer):
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    code = serializers.RegexField(r"^\\d{6}$", max_length=6, min_length=6)
+    code = serializers.RegexField(r"^\d{6}$", max_length=6, min_length=6)
 
 
 class ResendCodeSerializer(serializers.Serializer):
