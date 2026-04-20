@@ -142,7 +142,7 @@ class OnboardingSerializer(serializers.Serializer):
 
         # 4. Buyer Validation
         elif role == RoleChoices.BUYER:
-            required_fields = ["organization_name", "industry", "use_case"]
+            required_fields = ["industry", "use_case"]
             for field in required_fields:
                 if field not in step_2:
                     raise serializers.ValidationError(f"Buyer: {field.replace('_', ' ')} is required.")
