@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -10,6 +11,7 @@ from apps.users.serializers import (
 	RegisterSerializer,
 	ResendCodeSerializer,
 	ResetPasswordSerializer,
+	UserSerializer,
 	VerifyEmailSerializer,
 )
 from core.services.auth_service import AuthService, AuthServiceError
@@ -134,3 +136,12 @@ class ResetPasswordView(APIView):
 			return Response({"message": exc.message}, status=exc.status_code)
 
 		return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)
+
+
+class MeView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: UserSerializer})
+	def get(self, request):
+		serializer = UserSerializer(request.user)
+		return Response(serializer.data)
