@@ -9,7 +9,6 @@ from .roles import RoleChoices, TimeStampedModel
 class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, unique=True)
-    phone_number = models.CharField(max_length=20, blank=True)
     full_name = models.CharField(max_length=255)
     role = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.UNKNOWN)
 
