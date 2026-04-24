@@ -2,8 +2,9 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 
+from apps.common.models.base import TimeStampedModel
 from apps.users.managers import CustomUserManager
-from .roles import RoleChoices, TimeStampedModel
+from .roles import RoleChoices
 
 
 class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):

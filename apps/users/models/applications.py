@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.db import models
 
-from .roles import RoleApplicationStatusChoices, RoleChoices, TimeStampedModel
+from apps.common.models.base import TimeStampedModel
+
+from .roles import RoleApplicationStatusChoices, RoleChoices
 
 
 class RoleApplication(TimeStampedModel):

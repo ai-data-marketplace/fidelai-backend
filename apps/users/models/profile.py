@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import models
 
-from .roles import TimeStampedModel
+from apps.common.models.base import TimeStampedModel
 
 
 class UserProfile(TimeStampedModel):

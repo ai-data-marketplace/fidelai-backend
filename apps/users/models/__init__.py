@@ -1,9 +1,10 @@
+from apps.common.models.base import TimeStampedModel
+
 from .applications import RoleApplication, VerificationDocument
 from .profile import UserProfile
 from .roles import (
     RoleApplicationStatusChoices,
     RoleChoices,
-    TimeStampedModel,
 )
 from .user import CustomUser, EmailVerificationCode
 
