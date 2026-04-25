@@ -34,6 +34,18 @@ class TaskAssignmentStatusChoices(models.TextChoices):
     DECLINED = "declined", "Declined"
 
 
+class ChunkStatusChoices(models.TextChoices):
+    PENDING = "pending", "Pending"
+    AI_PROCESSED = "ai_processed", "AI Processed"
+    IN_ANNOTATION = "in_annotation", "In Annotation"
+    ANNOTATED = "annotated", "Annotated"
+    CONSENSUS_READY = "consensus_ready", "Consensus Ready"
+    ESCALATED = "escalated", "Escalated"
+    RESOLVED = "resolved", "Resolved"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+
+
 class ExtractedDocument(TimeStampedModel):
     raw_document = models.OneToOneField(
         "documents.RawDocument",
@@ -60,6 +72,11 @@ class Chunk(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="chunks",
     )
+    status = models.CharField(
+        max_length=20,
+        choices=ChunkStatusChoices.choices,
+        default=ChunkStatusChoices.PENDING,
+    )
     text = models.TextField()
     order_index = models.PositiveIntegerField()
     char_start = models.PositiveIntegerField()
@@ -81,6 +98,7 @@ class Chunk(TimeStampedModel):
         ]
         indexes = [
             models.Index(fields=["extracted_document"]),
+            models.Index(fields=["status"]),
             models.Index(fields=["order_index"]),
             models.Index(fields=["extracted_document", "order_index"]),
         ]

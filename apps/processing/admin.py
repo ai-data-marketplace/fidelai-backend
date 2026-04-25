@@ -29,13 +29,14 @@ class ChunkAdmin(admin.ModelAdmin):
 	list_display = (
 		"id",
 		"extracted_document",
+		"status",
 		"order_index",
 		"char_start",
 		"char_end",
 		"token_count",
 		"created_at",
 	)
-	list_filter = ("created_at", "updated_at")
+	list_filter = ("status", "created_at", "updated_at")
 	search_fields = ("id", "extracted_document__id", "extracted_document__raw_document__title", "text")
 	raw_id_fields = ("extracted_document",)
 	ordering = ("extracted_document", "order_index")

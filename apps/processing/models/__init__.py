@@ -2,6 +2,7 @@ from .ai import AIQualityCheck
 from .annotations import Annotation
 from .chunk import (
     Chunk,
+    ChunkStatusChoices,
     ConfidenceChoices,
     DomainMatchChoices,
     ExtractedDocument,
@@ -19,6 +20,7 @@ __all__ = [
     "SafetyChoices",
     "ConfidenceChoices",
     "TaskAssignmentStatusChoices",
+    "ChunkStatusChoices",
     "ExtractedDocument",
     "Chunk",
     "AIQualityCheck",
