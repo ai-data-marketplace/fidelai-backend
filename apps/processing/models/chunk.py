@@ -92,7 +92,7 @@ class Chunk(TimeStampedModel):
                 name="uniq_chunk_extracted_document_order",
             ),
             models.CheckConstraint(
-                check=models.Q(char_end__gt=models.F("char_start")),
+                condition=models.Q(char_end__gt=models.F("char_start")),
                 name="chk_chunk_char_end_gt_start",
             ),
         ]

@@ -20,7 +20,7 @@ class Consensus(TimeStampedModel):
         ordering = ("-computed_at",)
         constraints = [
             models.CheckConstraint(
-                check=models.Q(agreement_score__gte=0.0) & models.Q(agreement_score__lte=1.0),
+                condition=models.Q(agreement_score__gte=0.0) & models.Q(agreement_score__lte=1.0),
                 name="chk_consensus_agreement_score_range",
             ),
         ]
