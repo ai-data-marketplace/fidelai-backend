@@ -12,7 +12,7 @@ from .chunk import (
 )
 from .consensus import Consensus
 from .expert_review import ExpertReview, ExpertTask, ExpertTaskChunk
-from .tasks import AnnotationTask, TaskAssignment, TaskChunk
+from .annotation_tasks import AnnotationTask, TaskAssignment, TaskChunk
 
 __all__ = [
     "DomainMatchChoices",

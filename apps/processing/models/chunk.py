@@ -52,18 +52,30 @@ class ExtractedDocument(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="extracted_document",
     )
-    extracted_text = models.TextField()
-    extraction_metadata = models.JSONField(blank=True, null=True)
+    full_text = models.TextField()
+    structure = models.JSONField(default=list)
+    layout_metadata = models.JSONField(default=dict, blank=True, null=True)
+    language_detected = models.CharField(max_length=32, default="amharic")
+    confidence_score = models.DecimalField(max_digits=5, decimal_places=4, default=0)
     processed_at = models.DateTimeField()
 
     class Meta:
         ordering = ("-processed_at",)
         indexes = [
             models.Index(fields=["processed_at"]),
+            models.Index(fields=["language_detected"]),
         ]
 
     def __str__(self):
         return f"ExtractedDocument<{self.raw_document_id}>"
+
+    @property
+    def extracted_text(self):
+        return self.full_text
+
+    @property
+    def extraction_metadata(self):
+        return self.layout_metadata
 
 
 class Chunk(TimeStampedModel):
