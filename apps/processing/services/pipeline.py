@@ -48,10 +48,20 @@ class DocumentProcessingPipelineService:
             ordered_text = extracted.text
         elif ingestion_result.extension == "pdf":
             pdf_result = self.pdf_service.extract(file_bytes)
-            if not pdf_result or not any(page.text.strip() for page in pdf_result):
-                ocr_result = self.ocr_service.extract_page_text(file_bytes, page_number=1)
-                pages = [{"page": ocr_result.page_number, "blocks": ocr_result.blocks, "text": ocr_result.text, "confidence": ocr_result.confidence}]
-                ordered_text = ocr_result.text
+            text_layer_quality = self.pdf_service.assess_text_layer_quality(pdf_result)
+            should_fallback_to_ocr = (
+                not pdf_result
+                or not any(page.text.strip() for page in pdf_result)
+                or text_layer_quality.get("should_fallback", False)
+            )
+
+            if should_fallback_to_ocr:
+                ocr_results = self.ocr_service.extract_pdf_text(file_bytes)
+                pages = [
+                    {"page": page.page_number, "blocks": page.blocks, "text": page.text, "confidence": page.confidence}
+                    for page in ocr_results
+                ]
+                ordered_text = "\n".join(page["text"] for page in pages)
             else:
                 pages = [{"page": page.page_number, "blocks": page.blocks, "text": page.text, "confidence": page.confidence} for page in pdf_result]
                 ordered_text = "\n".join(page["text"] for page in pages)
@@ -59,6 +69,8 @@ class DocumentProcessingPipelineService:
             ocr_result = self.ocr_service.extract_page_text(file_bytes, page_number=1)
             pages = [{"page": ocr_result.page_number, "blocks": ocr_result.blocks, "text": ocr_result.text, "confidence": ocr_result.confidence}]
             ordered_text = ocr_result.text
+
+        text_layer_quality = locals().get("text_layer_quality", {"should_fallback": False, "page_flags": []})
 
         layout_result = self.layout_service.build_structure(pages)
         cleaned_text = self.cleaning_service.merge_fragments(
@@ -80,6 +92,8 @@ class DocumentProcessingPipelineService:
                 "file_name": ingestion_result.file_name,
                 "source_type": ingestion_result.source_type,
                 "uploaded_file_name": getattr(file_record.file, "name", Path(file_record.file.path).name),
+                "ocr_fallback_used": bool(text_layer_quality.get("should_fallback", False)),
+                "text_layer_quality": text_layer_quality,
             },
             language_detected=language_result.language_detected,
             confidence_score=language_result.confidence_score,

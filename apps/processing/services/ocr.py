@@ -17,6 +17,11 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     pytesseract = None
 
+try:
+    import fitz  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    fitz = None
+
 
 @dataclass(frozen=True)
 class OCRPageResult:
@@ -96,6 +101,20 @@ class OCRService:
 
         confidence_score = mean(confidence_values) / 100 if confidence_values else 0.0
         return OCRPageResult(page_number=page_number, text=(raw_text or "").strip(), confidence=confidence_score, blocks=blocks)
+
+    def extract_pdf_text(self, pdf_bytes: bytes) -> list[OCRPageResult]:
+        """Render PDF pages to images and OCR each page."""
+        if fitz is None:
+            raise RuntimeError("PyMuPDF is required to OCR PDF pages.")
+
+        document = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page_results: list[OCRPageResult] = []
+
+        for page in document:
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+            page_results.append(self.extract_page_text(pixmap.tobytes("png"), page_number=page.number + 1))
+
+        return page_results
 
     def score_confidence(self, extracted_pages: list[OCRPageResult]) -> float:
         scores = [page.confidence for page in extracted_pages if page.confidence is not None]

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 from typing import Any
 
 try:
@@ -10,6 +11,9 @@ try:
     import pdfplumber  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     pdfplumber = None
+
+CONTROL_AND_BIDI_PATTERN = re.compile(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u200E\u200F\u202A-\u202E]")
+HEBREW_OR_ARABIC_PATTERN = re.compile(r"[\u0590-\u05FF\u0600-\u06FF]")
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,35 @@ class PDFExtractionService:
                 }
             )
         return hints
+
+    def assess_text_layer_quality(self, extracted_pages: list[PDFPageResult]) -> dict[str, Any]:
+        """Flag text layers that look corrupted enough to warrant OCR fallback."""
+        page_flags: list[dict[str, Any]] = []
+        should_fallback = False
+
+        for page in extracted_pages:
+            text = page.text or ""
+            text_length = len(text)
+            if text_length == 0:
+                page_flags.append({"page": page.page_number, "suspicious_ratio": 0.0, "fallback": False})
+                continue
+
+            suspicious_chars = len(CONTROL_AND_BIDI_PATTERN.findall(text)) + len(HEBREW_OR_ARABIC_PATTERN.findall(text))
+            suspicious_ratio = suspicious_chars / text_length
+
+            fallback = suspicious_ratio >= 0.12 or suspicious_chars >= 25
+            page_flags.append({
+                "page": page.page_number,
+                "suspicious_ratio": round(suspicious_ratio, 4),
+                "suspicious_chars": suspicious_chars,
+                "fallback": fallback,
+            })
+            should_fallback = should_fallback or fallback
+
+        return {
+            "should_fallback": should_fallback,
+            "page_flags": page_flags,
+        }
 
 
 class PDFTextExtractorService(PDFExtractionService):
