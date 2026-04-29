@@ -31,3 +31,15 @@ To exercise the Celery task locally in-process:
 ```powershell
 c:/Users/aman/Desktop/fidelai-backend/venv/Scripts/python.exe scripts/run_processing_pipeline.py <raw_document_id> --mode celery
 ```
+
+## Scheduled Processing
+
+For production-style operation, use Celery worker + beat. Beat will run
+`DispatchPendingDocumentProcessing` every minute, which scans
+`RawDocument.processing_status = pending` and enqueues
+`DocumentProcessingPipeline(<raw_document_id>)` tasks.
+
+Environment variable:
+
+- `CELERY_PROCESSING_BATCH_SIZE` (default: `25`) controls how many pending docs
+	are queued per beat tick.

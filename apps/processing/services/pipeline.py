@@ -4,6 +4,7 @@ from pathlib import Path
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from apps.documents.models import ProcessingStatusChoices
 from apps.processing.models import ExtractedDocument
 
 from .assembler import DocumentStructureAssemblerService
@@ -89,4 +90,10 @@ class DocumentProcessingPipelineService:
             raw_document=raw_document,
             defaults=asdict(payload),
         )
+
+        # Mark source document as completed after successful persistence.
+        if raw_document.processing_status != ProcessingStatusChoices.COMPLETED:
+            raw_document.processing_status = ProcessingStatusChoices.COMPLETED
+            raw_document.save(update_fields=["processing_status"])
+
         return extracted_document

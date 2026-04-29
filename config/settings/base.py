@@ -1,7 +1,9 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -127,6 +129,14 @@ SPECTACULAR_SETTINGS = {
 AUTH_USER_MODEL = 'users.CustomUser'
 
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/1')
+CELERY_PROCESSING_BATCH_SIZE = env.int('CELERY_PROCESSING_BATCH_SIZE', default=25)
+CELERY_BEAT_SCHEDULE = {
+    'dispatch-pending-document-processing': {
+        'task': 'apps.processing.tasks.DispatchPendingDocumentProcessing',
+        'schedule': crontab(minute='*/1'),
+        'args': (CELERY_PROCESSING_BATCH_SIZE,),
+    },
+}
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
