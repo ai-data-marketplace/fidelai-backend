@@ -17,3 +17,17 @@ This project strictly adheres to modular domain-driven application patterns.
 3. Make a copy of `.env` and fill it in.
 4. Run migrations: `bash scripts/migrate.sh`
 5. Run server: `bash scripts/runserver.sh`
+
+## Processing Smoke Test
+
+To test the document preprocessing pipeline without a Celery worker, run:
+
+```powershell
+c:/Users/aman/Desktop/fidelai-backend/venv/Scripts/python.exe scripts/run_processing_pipeline.py <raw_document_id>
+```
+
+To exercise the Celery task locally in-process:
+
+```powershell
+c:/Users/aman/Desktop/fidelai-backend/venv/Scripts/python.exe scripts/run_processing_pipeline.py <raw_document_id> --mode celery
+```
