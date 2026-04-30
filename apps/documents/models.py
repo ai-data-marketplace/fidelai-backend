@@ -60,6 +60,11 @@ class RawDocument(TimeStampedModel):
 
     consent_given = models.BooleanField(default=False)
 
+    validation_notes = models.TextField(
+        blank=True,
+        help_text="Populated by the async metadata validator (e.g. Groq) with a human-readable reason."
+    )
+
     processing_status = models.CharField(
         max_length=20,
         choices=ProcessingStatusChoices.choices,

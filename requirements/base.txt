@@ -10,3 +10,4 @@ pillow
 djangorestframework-simplejwt
 django-storages
 drf-spectacular
+groq
