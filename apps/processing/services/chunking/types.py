@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 
-DEFAULT_TARGET_TOKENS = 800
-DEFAULT_MAX_TOKENS = 1200
+DEFAULT_TARGET_TOKENS = 50
+DEFAULT_MAX_TOKENS = 100
 PIPELINE_VERSION = "chunking_v1"
 
 
@@ -30,3 +30,4 @@ class ChunkSpan:
     source_blocks: list[BlockRef]
     mapping_method: str
     mapping_quality: float
+    close_reason: str = ""

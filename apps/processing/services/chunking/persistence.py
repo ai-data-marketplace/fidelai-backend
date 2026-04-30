@@ -8,7 +8,7 @@ from django.db import IntegrityError, transaction
 
 from apps.processing.models import Chunk, ChunkStatusChoices, ExtractedDocument
 
-from .planning import estimate_tokens
+from .planning import estimate_tokens, compute_chunk_quality
 from .types import ChunkSpan, PIPELINE_VERSION
 
 
@@ -39,6 +39,7 @@ class ChunkPersistenceEngine:
                             char_start=span.char_start,
                             char_end=span.char_end,
                             token_count=estimate_tokens(chunk_text),
+                            quality_score=compute_chunk_quality(text=chunk_text, mapping_quality=getattr(span, 'mapping_quality', 1.0)),
                             metadata=metadata,
                         )
                     )
@@ -71,6 +72,7 @@ class ChunkPersistenceEngine:
             "mapping": {
                 "method": span.mapping_method,
                 "quality": round(float(span.mapping_quality), 4),
+                "close_reason": span.close_reason,
                 "source_pages": source_pages,
                 "source_blocks": [block.ref for block in span.source_blocks[:200]],
             },
