@@ -7,6 +7,7 @@ from .ocr import OCRPageResult, OCRService
 from .pdf_text_extractor import PDFExtractionService, PDFPageResult, PDFTextExtractorService
 from .text_cleaning import TextCleaningService
 from .pipeline import DocumentProcessingPipelineService
+from .chunking import DocumentChunkingPipelineService
 
 __all__ = [
     "IngestionResult",
@@ -26,4 +27,5 @@ __all__ = [
     "LanguageDetectionResult",
     "DocumentStructureAssemblerService",
     "DocumentProcessingPipelineService",
+    "DocumentChunkingPipelineService",
 ]
