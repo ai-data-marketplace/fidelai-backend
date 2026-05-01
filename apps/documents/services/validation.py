@@ -69,7 +69,7 @@ class AbstractDocumentValidator(ABC):
 # Groq (llama3-70b-8192) concrete implementation
 # ---------------------------------------------------------------------------
 
-_GROQ_MODEL = "llama3-70b-8192"
+_GROQ_MODEL = "llama-3.3-70b-versatile"
 _MAX_TEXT_CHARS = 2_000  # stay well within token limits for a preview call
 
 _SYSTEM_PROMPT = (
@@ -84,7 +84,7 @@ _SYSTEM_PROMPT = (
 
 class GroqDocumentValidator(AbstractDocumentValidator):
     """
-    Uses the Groq Cloud API (llama3-70b-8192) to validate domain/language
+    Uses the Groq Cloud API (llama-3.3-70b-versatile) to validate domain/language
     alignment.  GROQ_API_KEY is read exclusively from the environment — it
     must never appear in the codebase.
     """
@@ -102,6 +102,7 @@ class GroqDocumentValidator(AbstractDocumentValidator):
             raise EnvironmentError(
                 "GROQ_API_KEY is not set. Add it to your .env file."
             )
+        logger.info("Instantiating Groq client")
         self._client = Groq(api_key=api_key)
 
     def validate(self, text: str, domain: str, language: str) -> ValidationResult:
@@ -120,6 +121,7 @@ class GroqDocumentValidator(AbstractDocumentValidator):
         )
 
         try:
+            logger.info("Sending request to Groq Cloud API for validation")
             response = self._client.chat.completions.create(
                 model=_GROQ_MODEL,
                 messages=[

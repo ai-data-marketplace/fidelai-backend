@@ -38,19 +38,29 @@ def dispatch_processing_on_file_upload(
         return
 
     raw_document_id = str(instance.raw_document_id)
+    logger.info("post_save signal triggered for DocumentFile, raw_document_id: %s", raw_document_id)
 
-    try:
-        # Import deferred to avoid circular dependencies at module load time.
-        from apps.processing.tasks import DocumentProcessingPipeline  # noqa: PLC0415
-        DocumentProcessingPipeline.delay(raw_document_id)
-        logger.info(
-            "Dispatched DocumentProcessingPipeline for RawDocument %s",
-            raw_document_id,
-        )
-    except Exception as exc:  # noqa: BLE001
-        # Non-fatal: the periodic beat task will pick it up on its next run.
-        logger.warning(
-            "Failed to dispatch DocumentProcessingPipeline for RawDocument %s: %s",
-            raw_document_id,
-            exc,
-        )
+    def _dispatch_pipeline():
+        logger.info("Entering on_commit hook for DocumentProcessingPipeline dispatch, raw_document_id: %s", raw_document_id)
+        try:
+            # Import deferred to avoid circular dependencies at module load time.
+            from apps.processing.tasks import DocumentProcessingPipeline  # noqa: PLC0415
+            DocumentProcessingPipeline.delay(raw_document_id)
+            logger.info(
+                "Dispatched DocumentProcessingPipeline for RawDocument %s",
+                raw_document_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.critical(
+                "CRITICAL: Broker unreachable. Failed to dispatch DocumentProcessingPipeline for RawDocument %s: %s",
+                raw_document_id,
+                exc,
+                exc_info=True,
+            )
+            from apps.documents.models import RawDocument, ProcessingStatusChoices
+            RawDocument.objects.filter(pk=raw_document_id).update(
+                processing_status=ProcessingStatusChoices.FAILED
+            )
+
+    from django.db import transaction
+    transaction.on_commit(_dispatch_pipeline)

@@ -75,6 +75,7 @@ class DocumentIngestionHandlerService:
         """
         extension = self._validate_file(uploaded_file)
         checksum = self._compute_checksum(uploaded_file)
+        self._check_duplicate(checksum)
 
         with transaction.atomic():
             raw_document = self._create_raw_document(user, metadata)
@@ -118,6 +119,12 @@ class DocumentIngestionHandlerService:
             digest.update(chunk)
         uploaded_file.seek(0)
         return digest.hexdigest()
+
+    @staticmethod
+    def _check_duplicate(checksum: str) -> None:
+        """Raise ValidationError if a document with this checksum already exists."""
+        if DocumentFile.objects.filter(checksum=checksum).exists():
+            raise ValidationError("A document with this content already exists in the system.")
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -167,13 +174,21 @@ class DocumentIngestionHandlerService:
         Dispatch Groq validation in a fire-and-forget manner.
         Import is deferred to avoid circular imports at module load time.
         """
-        try:
-            from apps.documents.tasks import ValidateDocumentMetadataTask  # noqa: PLC0415
-            ValidateDocumentMetadataTask.delay(str(raw_document.pk))
-        except Exception as exc:  # noqa: BLE001
-            # Non-fatal: validation failure should never block the ingestion response.
-            logger.warning(
-                "Failed to dispatch ValidateDocumentMetadataTask for %s: %s",
-                raw_document.pk,
-                exc,
-            )
+        def _dispatch_task():
+            try:
+                from apps.documents.tasks import ValidateDocumentMetadataTask  # noqa: PLC0415
+                ValidateDocumentMetadataTask.delay(str(raw_document.pk))
+            except Exception as exc:  # noqa: BLE001
+                logger.critical(
+                    "CRITICAL: Broker unreachable. Failed to dispatch ValidateDocumentMetadataTask for %s: %s",
+                    raw_document.pk,
+                    exc,
+                    exc_info=True,
+                )
+                from apps.documents.models import RawDocument, ReviewStatusChoices
+                RawDocument.objects.filter(pk=raw_document.pk).update(
+                    review_status=ReviewStatusChoices.REJECTED,
+                    validation_notes="System Error: Validation service unreachable (broker down)."
+                )
+
+        transaction.on_commit(_dispatch_task)

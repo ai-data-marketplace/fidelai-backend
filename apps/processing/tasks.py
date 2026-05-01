@@ -1,4 +1,7 @@
+import logging
 from celery import shared_task
+
+logger = logging.getLogger(__name__)
 from celery.exceptions import MaxRetriesExceededError
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, OperationalError
@@ -27,6 +30,8 @@ class DocumentChunkingError(Exception):
     retry_jitter=True,
 )
 def DocumentProcessingPipeline(self, raw_document_id: int):
+    logger.info("DocumentProcessingPipeline started for RawDocument ID: %s", raw_document_id)
+    logger.info("Attempting to change status to PROCESSING for RawDocument ID: %s", raw_document_id)
     claimed = RawDocument.objects.filter(
         pk=raw_document_id,
         processing_status=ProcessingStatusChoices.PENDING,
@@ -48,17 +53,22 @@ def DocumentProcessingPipeline(self, raw_document_id: int):
         raw_document = RawDocument.objects.prefetch_related("files").get(pk=raw_document_id)
         return str(DocumentProcessingPipelineService().run(raw_document).pk)
     except RawDocument.DoesNotExist as exc:
+        logger.error("DocumentProcessingPipeline failed: RawDocument %s does not exist", raw_document_id, exc_info=True)
         raise DocumentProcessingError(f"RawDocument {raw_document_id} does not exist") from exc
     except ValidationError as exc:
+        logger.error("DocumentProcessingPipeline validation error for RawDocument %s: %s", raw_document_id, exc, exc_info=True)
         RawDocument.objects.filter(pk=raw_document_id).update(processing_status=ProcessingStatusChoices.FAILED)
         raise DocumentProcessingError(str(exc)) from exc
     except (OperationalError, DatabaseError, OSError) as exc:
+        logger.error("DocumentProcessingPipeline retryable error for RawDocument %s: %s", raw_document_id, exc, exc_info=True)
         try:
             raise self.retry(exc=exc)
         except MaxRetriesExceededError as retry_exc:
+            logger.error("DocumentProcessingPipeline max retries exceeded for RawDocument %s", raw_document_id, exc_info=True)
             RawDocument.objects.filter(pk=raw_document_id).update(processing_status=ProcessingStatusChoices.FAILED)
             raise DocumentProcessingError(f"Max retries exceeded for RawDocument {raw_document_id}") from retry_exc
     except Exception as exc:
+        logger.error("DocumentProcessingPipeline unexpected error for RawDocument %s: %s", raw_document_id, exc, exc_info=True)
         RawDocument.objects.filter(pk=raw_document_id).update(processing_status=ProcessingStatusChoices.FAILED)
         raise DocumentProcessingError(str(exc)) from exc
 
