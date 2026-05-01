@@ -131,6 +131,8 @@ AUTH_USER_MODEL = 'users.CustomUser'
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/1')
 CELERY_PROCESSING_BATCH_SIZE = env.int('CELERY_PROCESSING_BATCH_SIZE', default=25)
 CELERY_CHUNKING_BATCH_SIZE = env.int('CELERY_CHUNKING_BATCH_SIZE', default=25)
+CELERY_TASK_CREATION_BATCH_SIZE = env.int('CELERY_TASK_CREATION_BATCH_SIZE', default=25)
+CELERY_MAX_CHUNKS_PER_TASK = env.int('CELERY_MAX_CHUNKS_PER_TASK', default=30)
 CELERY_BEAT_SCHEDULE = {
     'dispatch-pending-document-processing': {
         'task': 'apps.processing.tasks.DispatchPendingDocumentProcessing',
@@ -141,6 +143,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.processing.tasks.DispatchPendingChunking',
         'schedule': crontab(minute='*/1'),
         'args': (CELERY_CHUNKING_BATCH_SIZE,),
+    },
+    'dispatch-pending-task-creation': {
+        'task': 'apps.processing.tasks.DispatchPendingTaskCreation',
+        'schedule': crontab(minute='*/1'),
+        'args': (CELERY_TASK_CREATION_BATCH_SIZE, CELERY_MAX_CHUNKS_PER_TASK),
     },
 }
 

@@ -37,11 +37,17 @@ class DocumentChunkingError(Exception):
     retry_backoff_max=300,
     retry_jitter=True,
 )
-def CreateAnnotationTaskFromExtractedDocument(self, extracted_document_id: str, created_by_id: int | None = None):
+def CreateAnnotationTaskFromExtractedDocument(
+    self,
+    extracted_document_id: str,
+    created_by_id: int | None = None,
+    max_chunks_per_task: int = 30,
+):
     try:
         result = TaskCreationService().create_task_for_extracted_document(
             extracted_document_id=extracted_document_id,
             created_by=created_by_id,
+            max_chunks_per_task=max_chunks_per_task,
         )
         logger.info(
             "Task creation completed for ExtractedDocument %s: created=%s existing=%s task_id=%s",
@@ -199,6 +205,28 @@ def DispatchPendingChunking(batch_size: int = 25):
 
     for extracted_document_id in pending_ids:
         ChunkExtractedDocument.delay(str(extracted_document_id))
+
+    return {
+        "queued_count": len(pending_ids),
+        "queued_ids": [str(extracted_document_id) for extracted_document_id in pending_ids],
+    }
+
+
+@shared_task
+def DispatchPendingTaskCreation(batch_size: int = 25, max_chunks_per_task: int = 30):
+    """Queue task-creation jobs for chunked ExtractedDocuments that do not yet have AnnotationTasks."""
+    pending_ids = list(
+        ExtractedDocument.objects.filter(chunks__isnull=False, annotation_tasks__isnull=True)
+        .order_by("processed_at")
+        .values_list("id", flat=True)[:batch_size]
+    )
+
+    for extracted_document_id in pending_ids:
+        CreateAnnotationTaskFromExtractedDocument.delay(
+            str(extracted_document_id),
+            None,
+            max_chunks_per_task,
+        )
 
     return {
         "queued_count": len(pending_ids),

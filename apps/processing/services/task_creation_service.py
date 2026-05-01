@@ -31,8 +31,17 @@ class DuplicateTaskError(Exception):
 
 
 class TaskCreationService:
-    def create_task_for_extracted_document(self, extracted_document_id: int, created_by=None):
+    def create_task_for_extracted_document(self, extracted_document_id: int, created_by=None, max_chunks_per_task: int = 30):
+        """Create one or more AnnotationTask objects for an ExtractedDocument.
+
+        Splits ordered chunks into batches of size <= `max_chunks_per_task` and
+        creates an AnnotationTask per batch. Returns summary of created and
+        existing tasks.
+        """
         logger.info("Task creation started for ExtractedDocument %s", extracted_document_id)
+
+        created_tasks = []
+        existing_tasks = []
 
         with transaction.atomic():
             extracted_document, chunks = self._validate_document(
@@ -46,45 +55,71 @@ class TaskCreationService:
                 len(chunks),
             )
 
-            existing_task = self._check_existing_task(extracted_document_id=extracted_document_id)
-            if existing_task:
-                logger.info(
-                    "Duplicate prevention triggered for ExtractedDocument %s. Existing task id=%s",
-                    extracted_document_id,
-                    existing_task.id,
+            # Partition chunks into batches
+            total_chunks = len(chunks)
+            if total_chunks == 0:
+                raise NoChunksFoundError(f"No chunks found for ExtractedDocument {extracted_document_id}")
+
+            parts = (total_chunks + max_chunks_per_task - 1) // max_chunks_per_task
+
+            for part_index in range(parts):
+                start = part_index * max_chunks_per_task
+                end = start + max_chunks_per_task
+                batch_chunks = chunks[start:end]
+
+                # Duplicate prevention: skip if any task already links to these chunks
+                batch_chunk_ids = [c.id for c in batch_chunks]
+                existing = (
+                    AnnotationTask.objects.filter(extracted_document=extracted_document)
+                    .filter(task_chunks__chunk__id__in=batch_chunk_ids)
+                    .distinct()
+                    .first()
                 )
-                return {
-                    "task_id": existing_task.id,
-                    "created": False,
-                    "existing": True,
-                }
 
-            task_name = self._generate_task_name(extracted_document)
-            task_description = self._generate_task_description(extracted_document=extracted_document, chunks=chunks)
+                if existing:
+                    logger.info(
+                        "Skipping creation for part %s/%s because existing AnnotationTask id=%s links to these chunks",
+                        part_index + 1,
+                        parts,
+                        existing.id,
+                    )
+                    existing_tasks.append({"task_id": existing.id, "part": part_index + 1})
+                    continue
 
-            task = self._create_annotation_task(
-                extracted_document=extracted_document,
-                task_name=task_name,
-                task_description=task_description,
-                total_chunks=len(chunks),
-                created_by=created_by,
-            )
+                # Create task for this batch
+                task_name = self._generate_task_name(extracted_document)
+                # append part info to name when multiple parts
+                if parts > 1:
+                    task_name = f"{task_name} (Part {part_index + 1}/{parts})"
 
-            self._create_task_chunks(task=task, chunks=chunks)
-            self._update_chunk_statuses(chunks=chunks)
+                task_description = self._generate_task_description(extracted_document=extracted_document, chunks=batch_chunks)
+
+                task = AnnotationTask.objects.create(
+                    name=task_name,
+                    domain=extracted_document.raw_document.domain,
+                    description=task_description,
+                    created_by=created_by,
+                    total_chunks=len(batch_chunks),
+                    extracted_document=extracted_document,
+                )
+
+                self._create_task_chunks(task=task, chunks=batch_chunks)
+                # intentionally do not change chunk statuses at this stage
+
+                created_tasks.append({"task_id": task.id, "task_name": task.name, "total_chunks": task.total_chunks, "part": part_index + 1})
 
         logger.info(
-            "Task creation completed for ExtractedDocument %s. Created AnnotationTask id=%s",
+            "Task creation completed for ExtractedDocument %s. created=%s existing=%s",
             extracted_document_id,
-            task.id,
+            len(created_tasks),
+            len(existing_tasks),
         )
+
         return {
-            "task_id": task.id,
-            "task_name": task.name,
-            "domain": task.domain,
-            "total_chunks": task.total_chunks,
-            "created": True,
-            "existing": False,
+            "created": bool(created_tasks),
+            "created_tasks": created_tasks,
+            "existing_tasks": existing_tasks,
+            "total_chunks": total_chunks,
         }
 
     def _validate_document(self, extracted_document_id: int, lock_for_update: bool = False):
@@ -130,25 +165,18 @@ class TaskCreationService:
         return f"{base_name} - {domain} Annotation Task"
 
     def _generate_task_description(self, extracted_document: ExtractedDocument, chunks: list[Chunk]):
-        raw_document = extracted_document.raw_document
-        contributor = getattr(raw_document, "user", None)
-        contributor_display = None
-        if contributor:
-            contributor_display = getattr(contributor, "email", None) or getattr(contributor, "username", None)
-        contributor_display = contributor_display or f"user_id={raw_document.user_id}"
-
-        return "\n".join(
-            [
-                f"Raw Document ID: {raw_document.id}",
-                f"Raw Document Title: {raw_document.title}",
-                f"Source Contributor: {contributor_display}",
-                f"Domain: {raw_document.domain}",
-                f"Total Chunks: {len(chunks)}",
-                f"Language: {extracted_document.language_detected}",
-                f"Extraction Confidence: {extracted_document.confidence_score}",
-                f"Processing Timestamp: {extracted_document.processed_at.isoformat()}",
-            ]
-        )
+        domain = extracted_document.raw_document.domain
+        domain_phrases = {
+            "health": "medical transcription segments",
+            "education": "educational transcription segments",
+            "law": "legal transcription segments",
+            "finance": "financial transcription segments",
+            "news": "news transcription segments",
+            "religion": "religious transcription segments",
+            "other": "transcription segments",
+        }
+        subject = domain_phrases.get(domain, "transcription segments")
+        return f"Annotate {subject}."
 
     def _create_annotation_task(
         self,
