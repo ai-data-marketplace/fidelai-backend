@@ -38,6 +38,8 @@ def ValidateDocumentMetadataTask(self, raw_document_id: str) -> dict:
     from apps.documents.models import RawDocument  # noqa: PLC0415 – deferred to avoid import cycles
     from apps.documents.services.validation import get_validator  # noqa: PLC0415
 
+    logger.info("ValidateDocumentMetadataTask started for RawDocument ID: %s", raw_document_id)
+
     # ------------------------------------------------------------------ #
     # 1. Load the document
     # ------------------------------------------------------------------ #
@@ -64,12 +66,59 @@ def ValidateDocumentMetadataTask(self, raw_document_id: str) -> dict:
         )
         try:
             raise self.retry(countdown=120)
-        except Exception:  # MaxRetriesExceededError
+        except Exception as exc:  # MaxRetriesExceededError
             logger.warning(
                 "ValidateDocumentMetadataTask: gave up waiting for extraction on %s.",
                 raw_document_id,
+                exc_info=True,
             )
             return {"skipped": True, "reason": "extraction_not_ready"}
+
+    # ------------------------------------------------------------------ #
+    # 2.5 Automatic Similarity Block
+    # ------------------------------------------------------------------ #
+    try:
+        extracted = raw_document.extracted_document
+        current_text = extracted.full_text if extracted else None
+    except Exception:
+        current_text = None
+
+    if current_text:
+        from apps.processing.services.similarity import SimilarityService
+        
+        similarity_service = SimilarityService()
+        is_duplicate, duplicate_info = similarity_service.check_duplicate(raw_document, current_text)
+                
+        if is_duplicate:
+            purge_msg = f"PURGING DUPLICATE: [{duplicate_info['new_file']}] was {duplicate_info['score']:.2f}% similar to [{duplicate_info['existing_file']}]"
+            logger.info(purge_msg)
+            
+            reason = "This content is too similar to an existing document and has been flagged as a duplicate."
+            
+            # Update status to a temporary 'Duplicate Rejected' state before wipe
+            RawDocument.objects.filter(pk=raw_document_id).update(
+                review_status=ReviewStatusChoices.REJECTED,
+                validation_notes=reason,
+            )
+            
+            # Delete physical files to prevent orphans
+            for file_record in raw_document.files.all():
+                if file_record.file:
+                    file_record.file.delete(save=False)
+                    
+            # Delete the RawDocument and cascade delete its associated records
+            raw_document.delete()
+            
+            return {
+                "raw_document_id": raw_document_id,
+                "is_valid": False,
+                "review_status": ReviewStatusChoices.REJECTED,
+                "confidence": 1.0,
+                "reason": reason,
+                "purged": True,
+            }
+        else:
+            logger.info("Similarity check passed: Proceeding to Groq")
 
     # ------------------------------------------------------------------ #
     # 3. Run validation
@@ -122,27 +171,13 @@ def _extract_text_preview(raw_document) -> str | None:
     Return up to _MAX_PREVIEW_BYTES of text for validation.
 
     Strategy:
-      - TXT files: open the file from storage and read directly.
-      - PDF / DOCX: use the already-extracted full_text from the processing pipeline.
+      - Wait for ExtractedDocument from the processing pipeline.
       - If no text is available yet, return None (caller will retry).
     """
     file_record = raw_document.files.order_by("-uploaded_at").first()
     if not file_record:
         return ""  # No file at all — validate with empty string (will fail is_valid).
 
-    file_name: str = file_record.file_name or ""
-    extension = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
-
-    if extension == "txt":
-        try:
-            with file_record.file.open("rb") as fh:
-                raw_bytes = fh.read(_MAX_PREVIEW_BYTES)
-            return raw_bytes.decode("utf-8", errors="replace")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not read TXT preview for %s: %s", raw_document.pk, exc)
-            return ""
-
-    # For PDF / DOCX wait for ExtractedDocument
     try:
         extracted = raw_document.extracted_document
         if extracted and extracted.full_text:
