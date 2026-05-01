@@ -57,6 +57,7 @@ class ExtractedDocument(TimeStampedModel):
     layout_metadata = models.JSONField(default=dict, blank=True, null=True)
     language_detected = models.CharField(max_length=32, default="amharic")
     confidence_score = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    similarity_signature = models.JSONField(blank=True, null=True)
     processed_at = models.DateTimeField()
 
     class Meta:
