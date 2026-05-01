@@ -1,3 +1,5 @@
+import logging
+
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
 from django.core.exceptions import ValidationError
@@ -8,6 +10,15 @@ from apps.processing.models import Chunk, ExtractedDocument
 
 from .services.pipeline import DocumentProcessingPipelineService
 from .services.chunking import DocumentChunkingPipelineService
+from .services.task_creation_service import (
+    DocumentNotFoundError,
+    MissingDomainError,
+    NoChunksFoundError,
+    TaskCreationService,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessingError(Exception):
@@ -16,6 +27,58 @@ class DocumentProcessingError(Exception):
 
 class DocumentChunkingError(Exception):
     pass
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
+def CreateAnnotationTaskFromExtractedDocument(self, extracted_document_id: str, created_by_id: int | None = None):
+    try:
+        result = TaskCreationService().create_task_for_extracted_document(
+            extracted_document_id=extracted_document_id,
+            created_by=created_by_id,
+        )
+        logger.info(
+            "Task creation completed for ExtractedDocument %s: created=%s existing=%s task_id=%s",
+            extracted_document_id,
+            result.get("created"),
+            result.get("existing"),
+            result.get("task_id"),
+        )
+        return result
+    except (NoChunksFoundError, MissingDomainError, DocumentNotFoundError) as exc:
+        logger.warning(
+            "Task creation skipped for ExtractedDocument %s: %s",
+            extracted_document_id,
+            exc,
+        )
+        return {
+            "created": False,
+            "existing": False,
+            "reason": str(exc),
+        }
+    except (OperationalError, DatabaseError, OSError) as exc:
+        try:
+            raise self.retry(exc=exc)
+        except MaxRetriesExceededError as retry_exc:
+            logger.exception(
+                "Task creation retries exhausted for ExtractedDocument %s",
+                extracted_document_id,
+            )
+            raise DocumentChunkingError(
+                f"Max retries exceeded for ExtractedDocument {extracted_document_id}"
+            ) from retry_exc
+    except Exception as exc:
+        logger.exception(
+            "Task creation failed for ExtractedDocument %s",
+            extracted_document_id,
+        )
+        raise DocumentChunkingError(str(exc)) from exc
 
 
 @shared_task(
