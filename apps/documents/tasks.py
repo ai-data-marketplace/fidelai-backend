@@ -16,7 +16,7 @@ import logging
 from celery import shared_task
 from django.db import transaction
 
-from apps.documents.models import ReviewStatusChoices
+from apps.documents.models import ReviewStatusChoices, ProcessingStatusChoices
 
 logger = logging.getLogger(__name__)
 
@@ -83,40 +83,34 @@ def DocumentGatekeeperTask(self, raw_document_id: str) -> dict:
 
         is_duplicate, duplicate_info = similarity_service.check_duplicate(raw_document, current_text)
 
-    # 5. Auto-Purge
+    # 5. Soft Reject & Delayed Cleanup
     if is_duplicate:
-        purge_msg = f"PURGING DUPLICATE: [{duplicate_info['new_file']}] was {duplicate_info['score']:.2f}% similar to [{duplicate_info['existing_file']}]"
-        logger.info(purge_msg)
-        
-        reason = "This content is too similar to an existing document and has been flagged as a duplicate."
+        existing_filename = duplicate_info.get("existing_file", "Unknown")
+        reason = f"Duplicate of {existing_filename} detected. This record will be purged in 5 minutes."
+        logger.info("SOFT REJECT: %s - %s", raw_document_id, reason)
         
         RawDocument.objects.filter(pk=raw_document_id).update(
             review_status=ReviewStatusChoices.REJECTED,
+            processing_status=ProcessingStatusChoices.FAILED,
             validation_notes=reason,
         )
         
-        for record in raw_document.files.all():
-            if record.file:
-                record.file.delete(save=False)
-                
-        raw_document.delete()
+        def _schedule_purge():
+            purge_rejected_document.apply_async((str(raw_document_id),), countdown=300)
+            logger.info("Scheduled purge_rejected_document for %s in 300s", raw_document_id)
+
+        transaction.on_commit(_schedule_purge)
         
         return {
             "raw_document_id": raw_document_id,
             "is_valid": False,
             "review_status": ReviewStatusChoices.REJECTED,
-            "confidence": 1.0,
+            "purged": False,
             "reason": reason,
-            "purged": True,
         }
 
-    # 6. Handoff Logic: If unique, update status and trigger the processing pipeline
-    logger.info("Gatekeeper passed for %s. Updating status and dispatching processing pipeline.", raw_document_id)
-    
-    RawDocument.objects.filter(pk=raw_document_id).update(
-        review_status=ReviewStatusChoices.APPROVED,
-        validation_notes="Document passed gatekeeper checks.",
-    )
+    # 6. Handoff Logic: If unique, trigger processing pipeline (hands-off status)
+    logger.info("Gatekeeper passed for %s. Dispatching processing pipeline without status updates.", raw_document_id)
 
     def _trigger_pipeline():
         try:
@@ -131,8 +125,6 @@ def DocumentGatekeeperTask(self, raw_document_id: str) -> dict:
     return {
         "raw_document_id": raw_document_id,
         "is_valid": True,
-        "review_status": ReviewStatusChoices.APPROVED,
-        "confidence": 1.0,
         "reason": "Passed Gatekeeper",
     }
 
@@ -160,3 +152,23 @@ def _extract_text_for_similarity(file_record, extension) -> str:
     except Exception as exc:
         logger.warning("Error extracting text for similarity: %s", exc)
         return ""
+
+
+@shared_task
+def purge_rejected_document(raw_document_id: str):
+    """
+    Safely delete a document previously marked as REJECTED.
+    """
+    from apps.documents.models import RawDocument
+    try:
+        raw_document = RawDocument.objects.get(pk=raw_document_id)
+        if raw_document.review_status == ReviewStatusChoices.REJECTED:
+            for record in raw_document.files.all():
+                if record.file:
+                    record.file.delete(save=False)
+            raw_document.delete()
+            logger.info("Successfully purged REJECTED document %s", raw_document_id)
+        else:
+            logger.warning("purge_rejected_document aborted: Document %s is not in REJECTED state.", raw_document_id)
+    except RawDocument.DoesNotExist:
+        logger.info("purge_rejected_document: Document %s already deleted.", raw_document_id)
