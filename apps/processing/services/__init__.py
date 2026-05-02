@@ -15,6 +15,7 @@ from .task_creation_service import (
     NoChunksFoundError,
     TaskCreationService,
 )
+from .task_assignment_service import TaskAssignmentService
 
 __all__ = [
     "IngestionResult",
@@ -40,4 +41,5 @@ __all__ = [
     "NoChunksFoundError",
     "MissingDomainError",
     "DuplicateTaskError",
+    "TaskAssignmentService",
 ]

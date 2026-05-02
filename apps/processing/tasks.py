@@ -16,6 +16,7 @@ from .services.task_creation_service import (
     NoChunksFoundError,
     TaskCreationService,
 )
+from .services.task_assignment_service import TaskAssignmentService
 
 
 logger = logging.getLogger(__name__)
@@ -232,3 +233,15 @@ def DispatchPendingTaskCreation(batch_size: int = 25, max_chunks_per_task: int =
         "queued_count": len(pending_ids),
         "queued_ids": [str(extracted_document_id) for extracted_document_id in pending_ids],
     }
+
+
+@shared_task
+def DispatchPendingTaskAssignments():
+    """Assign unfilled annotation tasks to eligible annotators."""
+    result = TaskAssignmentService().assign_pending_tasks()
+    logger.info(
+        "Task assignment dispatch completed: tasks_scanned=%s assignments_created=%s",
+        result.get("tasks_scanned", 0),
+        result.get("assignments_created", 0),
+    )
+    return result

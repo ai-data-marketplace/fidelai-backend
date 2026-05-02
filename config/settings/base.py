@@ -149,6 +149,10 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(minute='*/1'),
         'args': (CELERY_TASK_CREATION_BATCH_SIZE, CELERY_MAX_CHUNKS_PER_TASK),
     },
+    'dispatch-pending-task-assignments': {
+        'task': 'apps.processing.tasks.DispatchPendingTaskAssignments',
+        'schedule': crontab(minute='*/5'),
+    },
 }
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
