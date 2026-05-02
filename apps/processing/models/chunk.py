@@ -95,6 +95,7 @@ class Chunk(TimeStampedModel):
     char_start = models.PositiveIntegerField()
     char_end = models.PositiveIntegerField()
     token_count = models.PositiveIntegerField()
+    quality_score = models.FloatField(default=0.0, db_index=True)
     metadata = models.JSONField(blank=True, null=True)
 
     class Meta:

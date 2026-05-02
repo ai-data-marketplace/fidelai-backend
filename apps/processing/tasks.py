@@ -1,7 +1,6 @@
 import logging
-from celery import shared_task
 
-logger = logging.getLogger(__name__)
+from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, OperationalError
@@ -11,6 +10,15 @@ from apps.processing.models import Chunk, ExtractedDocument
 
 from .services.pipeline import DocumentProcessingPipelineService
 from .services.chunking import DocumentChunkingPipelineService
+from .services.task_creation_service import (
+    DocumentNotFoundError,
+    MissingDomainError,
+    NoChunksFoundError,
+    TaskCreationService,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessingError(Exception):
@@ -29,9 +37,65 @@ class DocumentChunkingError(Exception):
     retry_backoff_max=300,
     retry_jitter=True,
 )
+def CreateAnnotationTaskFromExtractedDocument(
+    self,
+    extracted_document_id: str,
+    created_by_id: int | None = None,
+    max_chunks_per_task: int = 30,
+):
+    try:
+        result = TaskCreationService().create_task_for_extracted_document(
+            extracted_document_id=extracted_document_id,
+            created_by=created_by_id,
+            max_chunks_per_task=max_chunks_per_task,
+        )
+        logger.info(
+            "Task creation completed for ExtractedDocument %s: created=%s existing=%s task_id=%s",
+            extracted_document_id,
+            result.get("created"),
+            result.get("existing"),
+            result.get("task_id"),
+        )
+        return result
+    except (NoChunksFoundError, MissingDomainError, DocumentNotFoundError) as exc:
+        logger.warning(
+            "Task creation skipped for ExtractedDocument %s: %s",
+            extracted_document_id,
+            exc,
+        )
+        return {
+            "created": False,
+            "existing": False,
+            "reason": str(exc),
+        }
+    except (OperationalError, DatabaseError, OSError) as exc:
+        try:
+            raise self.retry(exc=exc)
+        except MaxRetriesExceededError as retry_exc:
+            logger.exception(
+                "Task creation retries exhausted for ExtractedDocument %s",
+                extracted_document_id,
+            )
+            raise DocumentChunkingError(
+                f"Max retries exceeded for ExtractedDocument {extracted_document_id}"
+            ) from retry_exc
+    except Exception as exc:
+        logger.exception(
+            "Task creation failed for ExtractedDocument %s",
+            extracted_document_id,
+        )
+        raise DocumentChunkingError(str(exc)) from exc
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
 def DocumentProcessingPipeline(self, raw_document_id: int):
-    logger.info("DocumentProcessingPipeline started for RawDocument ID: %s", raw_document_id)
-    logger.info("Attempting to change status to PROCESSING for RawDocument ID: %s", raw_document_id)
     claimed = RawDocument.objects.filter(
         pk=raw_document_id,
         processing_status=ProcessingStatusChoices.PENDING,
@@ -53,22 +117,17 @@ def DocumentProcessingPipeline(self, raw_document_id: int):
         raw_document = RawDocument.objects.prefetch_related("files").get(pk=raw_document_id)
         return str(DocumentProcessingPipelineService().run(raw_document).pk)
     except RawDocument.DoesNotExist as exc:
-        logger.error("DocumentProcessingPipeline failed: RawDocument %s does not exist", raw_document_id, exc_info=True)
         raise DocumentProcessingError(f"RawDocument {raw_document_id} does not exist") from exc
     except ValidationError as exc:
-        logger.error("DocumentProcessingPipeline validation error for RawDocument %s: %s", raw_document_id, exc, exc_info=True)
         RawDocument.objects.filter(pk=raw_document_id).update(processing_status=ProcessingStatusChoices.FAILED)
         raise DocumentProcessingError(str(exc)) from exc
     except (OperationalError, DatabaseError, OSError) as exc:
-        logger.error("DocumentProcessingPipeline retryable error for RawDocument %s: %s", raw_document_id, exc, exc_info=True)
         try:
             raise self.retry(exc=exc)
         except MaxRetriesExceededError as retry_exc:
-            logger.error("DocumentProcessingPipeline max retries exceeded for RawDocument %s", raw_document_id, exc_info=True)
             RawDocument.objects.filter(pk=raw_document_id).update(processing_status=ProcessingStatusChoices.FAILED)
             raise DocumentProcessingError(f"Max retries exceeded for RawDocument {raw_document_id}") from retry_exc
     except Exception as exc:
-        logger.error("DocumentProcessingPipeline unexpected error for RawDocument %s: %s", raw_document_id, exc, exc_info=True)
         RawDocument.objects.filter(pk=raw_document_id).update(processing_status=ProcessingStatusChoices.FAILED)
         raise DocumentProcessingError(str(exc)) from exc
 
@@ -146,6 +205,28 @@ def DispatchPendingChunking(batch_size: int = 25):
 
     for extracted_document_id in pending_ids:
         ChunkExtractedDocument.delay(str(extracted_document_id))
+
+    return {
+        "queued_count": len(pending_ids),
+        "queued_ids": [str(extracted_document_id) for extracted_document_id in pending_ids],
+    }
+
+
+@shared_task
+def DispatchPendingTaskCreation(batch_size: int = 25, max_chunks_per_task: int = 30):
+    """Queue task-creation jobs for chunked ExtractedDocuments that do not yet have AnnotationTasks."""
+    pending_ids = list(
+        ExtractedDocument.objects.filter(chunks__isnull=False, annotation_tasks__isnull=True)
+        .order_by("processed_at")
+        .values_list("id", flat=True)[:batch_size]
+    )
+
+    for extracted_document_id in pending_ids:
+        CreateAnnotationTaskFromExtractedDocument.delay(
+            str(extracted_document_id),
+            None,
+            max_chunks_per_task,
+        )
 
     return {
         "queued_count": len(pending_ids),

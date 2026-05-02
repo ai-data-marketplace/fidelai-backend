@@ -100,15 +100,9 @@ class DocumentProcessingPipelineService:
             processed_at=timezone.now(),
         )
 
-        from apps.processing.services.similarity import SimilarityService
-        similarity_service = SimilarityService()
-        
-        defaults = asdict(payload)
-        defaults["similarity_signature"] = similarity_service.generate_signature(cleaned_text)
-
         extracted_document, _ = ExtractedDocument.objects.update_or_create(
             raw_document=raw_document,
-            defaults=defaults,
+            defaults=asdict(payload),
         )
 
         # Mark source document as completed after successful persistence.

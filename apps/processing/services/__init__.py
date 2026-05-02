@@ -8,6 +8,13 @@ from .pdf_text_extractor import PDFExtractionService, PDFPageResult, PDFTextExtr
 from .text_cleaning import TextCleaningService
 from .pipeline import DocumentProcessingPipelineService
 from .chunking import DocumentChunkingPipelineService
+from .task_creation_service import (
+    DocumentNotFoundError,
+    DuplicateTaskError,
+    MissingDomainError,
+    NoChunksFoundError,
+    TaskCreationService,
+)
 
 __all__ = [
     "IngestionResult",
@@ -28,4 +35,9 @@ __all__ = [
     "DocumentStructureAssemblerService",
     "DocumentProcessingPipelineService",
     "DocumentChunkingPipelineService",
+    "TaskCreationService",
+    "DocumentNotFoundError",
+    "NoChunksFoundError",
+    "MissingDomainError",
+    "DuplicateTaskError",
 ]

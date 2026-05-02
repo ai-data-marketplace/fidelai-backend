@@ -1,27 +1,27 @@
 """
 Celery tasks for the documents app.
 
-ValidateDocumentMetadataTask
-  - Reads the RawDocument and its first DocumentFile.
-  - Extracts a text preview:
-      * TXT files  → read first 2000 bytes directly from storage.
-      * PDF / DOCX → use ExtractedDocument.full_text once processing completes
-                     (if not yet available, exits gracefully and relies on the
-                     periodic beat task to retry eventually).
-  - Calls the configured AbstractDocumentValidator.
-  - Persists the result back to RawDocument.review_status + validation_notes.
+DocumentGatekeeperTask
+  - Validates file type and size.
+  - Extracts text from the raw document for similarity checks.
+  - Generates similarity signature.
+  - Runs the SimilarityService deduplication check.
+  - If duplicate -> Auto-Purge and update status.
+  - If unique -> Update status and trigger DocumentProcessingPipeline.
 """
 from __future__ import annotations
 
 import logging
 
 from celery import shared_task
+from django.db import transaction
 
 from apps.documents.models import ReviewStatusChoices
 
 logger = logging.getLogger(__name__)
 
-_MAX_PREVIEW_BYTES = 2_000
+ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
+MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
 
 @shared_task(
@@ -29,160 +29,134 @@ _MAX_PREVIEW_BYTES = 2_000
     max_retries=2,
     default_retry_delay=60,
 )
-def ValidateDocumentMetadataTask(self, raw_document_id: str) -> dict:
+def DocumentGatekeeperTask(self, raw_document_id: str) -> dict:
     """
-    Groq-backed domain/language alignment check for a submitted document.
-
-    Returns a summary dict (for Celery result backends / logging).
+    Gatekeeper flow for a submitted document.
     """
-    from apps.documents.models import RawDocument  # noqa: PLC0415 – deferred to avoid import cycles
-    from apps.documents.services.validation import get_validator  # noqa: PLC0415
+    from apps.documents.models import RawDocument  # noqa: PLC0415
+    from apps.documents.services.similarity import SimilarityService  # noqa: PLC0415
 
-    logger.info("ValidateDocumentMetadataTask started for RawDocument ID: %s", raw_document_id)
+    logger.info("DocumentGatekeeperTask started for RawDocument ID: %s", raw_document_id)
 
-    # ------------------------------------------------------------------ #
     # 1. Load the document
-    # ------------------------------------------------------------------ #
     try:
         raw_document = (
             RawDocument.objects.prefetch_related("files")
-            .select_related("extracted_document")
             .get(pk=raw_document_id)
         )
     except RawDocument.DoesNotExist:
-        logger.warning("ValidateDocumentMetadataTask: RawDocument %s not found.", raw_document_id)
+        logger.warning("DocumentGatekeeperTask: RawDocument %s not found.", raw_document_id)
         return {"skipped": True, "reason": "document_not_found"}
 
-    # ------------------------------------------------------------------ #
-    # 2. Extract a text preview
-    # ------------------------------------------------------------------ #
-    preview = _extract_text_preview(raw_document)
+    # 2. File Type/Size Check
+    file_record = raw_document.files.order_by("-uploaded_at").first()
+    if not file_record:
+        return {"skipped": True, "reason": "No file attached"}
 
-    if preview is None:
-        # Processing not yet done for non-TXT files — reschedule once.
-        logger.info(
-            "ValidateDocumentMetadataTask: ExtractedDocument not ready for %s, will retry.",
-            raw_document_id,
+    extension = file_record.file_name.rsplit(".", 1)[-1].lower() if "." in file_record.file_name else ""
+    if extension not in ALLOWED_EXTENSIONS or file_record.file_size > MAX_FILE_SIZE_BYTES:
+        reason = "Invalid file type or size exceeds limit."
+        logger.info("Gatekeeper failed for %s: %s", raw_document_id, reason)
+        RawDocument.objects.filter(pk=raw_document_id).update(
+            review_status=ReviewStatusChoices.REJECTED,
+            validation_notes=reason,
         )
-        try:
-            raise self.retry(countdown=120)
-        except Exception as exc:  # MaxRetriesExceededError
-            logger.warning(
-                "ValidateDocumentMetadataTask: gave up waiting for extraction on %s.",
-                raw_document_id,
-                exc_info=True,
-            )
-            return {"skipped": True, "reason": "extraction_not_ready"}
+        return {"is_valid": False, "reason": reason}
 
-    # ------------------------------------------------------------------ #
-    # 2.5 Automatic Similarity Block
-    # ------------------------------------------------------------------ #
-    try:
-        extracted = raw_document.extracted_document
-        current_text = extracted.full_text if extracted else None
-    except Exception:
-        current_text = None
+    # 3. Extract text for SimilarityService
+    current_text = _extract_text_for_similarity(file_record, extension)
 
+    if not current_text:
+        # If we couldn't extract text, we might skip similarity, but let's log it.
+        logger.warning("Could not extract text for similarity check on %s", raw_document_id)
+
+    # 4. Similarity Signature & Deduplication Check
+    is_duplicate = False
+    duplicate_info = {}
+    reason = ""
+    
     if current_text:
-        from apps.processing.services.similarity import SimilarityService
-        
         similarity_service = SimilarityService()
+        # Generate the text signature for the document
+        signature = similarity_service.generate_signature(current_text)
+        logger.info("Generated similarity signature for %s with %d tokens", raw_document_id, len(signature))
+
         is_duplicate, duplicate_info = similarity_service.check_duplicate(raw_document, current_text)
-                
-        if is_duplicate:
-            purge_msg = f"PURGING DUPLICATE: [{duplicate_info['new_file']}] was {duplicate_info['score']:.2f}% similar to [{duplicate_info['existing_file']}]"
-            logger.info(purge_msg)
-            
-            reason = "This content is too similar to an existing document and has been flagged as a duplicate."
-            
-            # Update status to a temporary 'Duplicate Rejected' state before wipe
-            RawDocument.objects.filter(pk=raw_document_id).update(
-                review_status=ReviewStatusChoices.REJECTED,
-                validation_notes=reason,
-            )
-            
-            # Delete physical files to prevent orphans
-            for file_record in raw_document.files.all():
-                if file_record.file:
-                    file_record.file.delete(save=False)
-                    
-            # Delete the RawDocument and cascade delete its associated records
-            raw_document.delete()
-            
-            return {
-                "raw_document_id": raw_document_id,
-                "is_valid": False,
-                "review_status": ReviewStatusChoices.REJECTED,
-                "confidence": 1.0,
-                "reason": reason,
-                "purged": True,
-            }
-        else:
-            logger.info("Similarity check passed: Proceeding to Groq")
 
-    # ------------------------------------------------------------------ #
-    # 3. Run validation
-    # ------------------------------------------------------------------ #
-    try:
-        validator = get_validator()
-        result = validator.validate(
-            text=preview,
-            domain=raw_document.domain,
-            language=raw_document.language,
+    # 5. Auto-Purge
+    if is_duplicate:
+        purge_msg = f"PURGING DUPLICATE: [{duplicate_info['new_file']}] was {duplicate_info['score']:.2f}% similar to [{duplicate_info['existing_file']}]"
+        logger.info(purge_msg)
+        
+        reason = "This content is too similar to an existing document and has been flagged as a duplicate."
+        
+        RawDocument.objects.filter(pk=raw_document_id).update(
+            review_status=ReviewStatusChoices.REJECTED,
+            validation_notes=reason,
         )
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Validator init/call failed for %s: %s", raw_document_id, exc)
-        return {"skipped": True, "reason": f"validator_error: {exc}"}
+        
+        for record in raw_document.files.all():
+            if record.file:
+                record.file.delete(save=False)
+                
+        raw_document.delete()
+        
+        return {
+            "raw_document_id": raw_document_id,
+            "is_valid": False,
+            "review_status": ReviewStatusChoices.REJECTED,
+            "confidence": 1.0,
+            "reason": reason,
+            "purged": True,
+        }
 
-    # ------------------------------------------------------------------ #
-    # 4. Persist outcome
-    # ------------------------------------------------------------------ #
-    new_review_status = (
-        ReviewStatusChoices.APPROVED if result.is_valid else ReviewStatusChoices.REJECTED
-    )
+    # 6. Handoff Logic: If unique, update status and trigger the processing pipeline
+    logger.info("Gatekeeper passed for %s. Updating status and dispatching processing pipeline.", raw_document_id)
+    
     RawDocument.objects.filter(pk=raw_document_id).update(
-        review_status=new_review_status,
-        validation_notes=result.reason,
+        review_status=ReviewStatusChoices.APPROVED,
+        validation_notes="Document passed gatekeeper checks.",
     )
 
-    logger.info(
-        "ValidateDocumentMetadataTask: document=%s is_valid=%s confidence=%.2f",
-        raw_document_id,
-        result.is_valid,
-        result.confidence,
-    )
+    def _trigger_pipeline():
+        try:
+            from apps.processing.tasks import DocumentProcessingPipeline  # noqa: PLC0415
+            DocumentProcessingPipeline.delay(str(raw_document_id))
+            logger.info("Dispatched DocumentProcessingPipeline for RawDocument %s", raw_document_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.critical("Failed to dispatch DocumentProcessingPipeline for RawDocument %s: %s", raw_document_id, exc)
+
+    transaction.on_commit(_trigger_pipeline)
 
     return {
         "raw_document_id": raw_document_id,
-        "is_valid": result.is_valid,
-        "review_status": new_review_status,
-        "confidence": result.confidence,
-        "reason": result.reason,
+        "is_valid": True,
+        "review_status": ReviewStatusChoices.APPROVED,
+        "confidence": 1.0,
+        "reason": "Passed Gatekeeper",
     }
 
 
-# ---------------------------------------------------------------------------
-# Helper: text preview extraction
-# ---------------------------------------------------------------------------
-
-
-def _extract_text_preview(raw_document) -> str | None:
+def _extract_text_for_similarity(file_record, extension) -> str:
     """
-    Return up to _MAX_PREVIEW_BYTES of text for validation.
-
-    Strategy:
-      - Wait for ExtractedDocument from the processing pipeline.
-      - If no text is available yet, return None (caller will retry).
+    Extract text directly from the file to check for similarity.
     """
-    file_record = raw_document.files.order_by("-uploaded_at").first()
-    if not file_record:
-        return ""  # No file at all — validate with empty string (will fail is_valid).
-
     try:
-        extracted = raw_document.extracted_document
-        if extracted and extracted.full_text:
-            return extracted.full_text[:_MAX_PREVIEW_BYTES]
-    except Exception:  # noqa: BLE001
-        pass
+        from apps.processing.services.docx_extractor import DOCXExtractionService
+        from apps.processing.services.pdf_text_extractor import PDFExtractionService
 
-    return None  # Signal to caller: not ready yet
+        with file_record.file.open("rb") as file_handle:
+            file_bytes = file_handle.read()
+
+        if extension == "docx":
+            extracted = DOCXExtractionService().extract(file_bytes)
+            return extracted.text if extracted else ""
+        elif extension == "pdf":
+            pdf_result = PDFExtractionService().extract(file_bytes)
+            if pdf_result:
+                return "\n".join(page.text for page in pdf_result)
+        else:
+            return file_bytes.decode('utf-8', errors='ignore')
+    except Exception as exc:
+        logger.warning("Error extracting text for similarity: %s", exc)
+        return ""

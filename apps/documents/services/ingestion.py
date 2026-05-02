@@ -81,8 +81,7 @@ class DocumentIngestionHandlerService:
             raw_document = self._create_raw_document(user, metadata)
             self._create_document_file(raw_document, uploaded_file, extension, checksum)
 
-        # Async metadata validation (Groq) — dispatched after the DB commit.
-        self._dispatch_metadata_validation(raw_document)
+        # Async processing is triggered by DocumentFile post_save signal
 
         return raw_document
 
@@ -164,31 +163,4 @@ class DocumentIngestionHandlerService:
             checksum=checksum,
         )
 
-    # ------------------------------------------------------------------
-    # Async dispatch
-    # ------------------------------------------------------------------
 
-    @staticmethod
-    def _dispatch_metadata_validation(raw_document: RawDocument) -> None:
-        """
-        Dispatch Groq validation in a fire-and-forget manner.
-        Import is deferred to avoid circular imports at module load time.
-        """
-        def _dispatch_task():
-            try:
-                from apps.documents.tasks import ValidateDocumentMetadataTask  # noqa: PLC0415
-                ValidateDocumentMetadataTask.delay(str(raw_document.pk))
-            except Exception as exc:  # noqa: BLE001
-                logger.critical(
-                    "CRITICAL: Broker unreachable. Failed to dispatch ValidateDocumentMetadataTask for %s: %s",
-                    raw_document.pk,
-                    exc,
-                    exc_info=True,
-                )
-                from apps.documents.models import RawDocument, ReviewStatusChoices
-                RawDocument.objects.filter(pk=raw_document.pk).update(
-                    review_status=ReviewStatusChoices.REJECTED,
-                    validation_notes="System Error: Validation service unreachable (broker down)."
-                )
-
-        transaction.on_commit(_dispatch_task)

@@ -7,6 +7,13 @@ from apps.processing.models.chunk import Chunk, TaskAssignmentStatusChoices
 
 class AnnotationTask(TimeStampedModel):
     name = models.CharField(max_length=255)
+    extracted_document = models.ForeignKey(
+        "processing.ExtractedDocument",
+        on_delete=models.CASCADE,
+        related_name="annotation_tasks",
+        blank=True,
+        null=True,
+    )
     domain = models.CharField(max_length=20, choices=DomainChoices.choices)
     description = models.TextField(blank=True)
     created_by = models.ForeignKey(

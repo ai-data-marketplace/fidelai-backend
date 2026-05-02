@@ -41,25 +41,24 @@ def dispatch_processing_on_file_upload(
     logger.info("post_save signal triggered for DocumentFile, raw_document_id: %s", raw_document_id)
 
     def _dispatch_pipeline():
-        logger.info("Entering on_commit hook for DocumentProcessingPipeline dispatch, raw_document_id: %s", raw_document_id)
+        logger.info("Entering on_commit hook for DocumentGatekeeperTask dispatch, raw_document_id: %s", raw_document_id)
         try:
-            # Import deferred to avoid circular dependencies at module load time.
-            from apps.processing.tasks import DocumentProcessingPipeline  # noqa: PLC0415
-            DocumentProcessingPipeline.delay(raw_document_id)
+            from apps.documents.tasks import DocumentGatekeeperTask  # noqa: PLC0415
+            DocumentGatekeeperTask.delay(raw_document_id)
             logger.info(
-                "Dispatched DocumentProcessingPipeline for RawDocument %s",
+                "Dispatched DocumentGatekeeperTask for RawDocument %s",
                 raw_document_id,
             )
         except Exception as exc:  # noqa: BLE001
             logger.critical(
-                "CRITICAL: Broker unreachable. Failed to dispatch DocumentProcessingPipeline for RawDocument %s: %s",
+                "CRITICAL: Broker unreachable. Failed to dispatch DocumentGatekeeperTask for RawDocument %s: %s",
                 raw_document_id,
                 exc,
                 exc_info=True,
             )
-            from apps.documents.models import RawDocument, ProcessingStatusChoices
+            from apps.documents.models import RawDocument, ReviewStatusChoices
             RawDocument.objects.filter(pk=raw_document_id).update(
-                processing_status=ProcessingStatusChoices.FAILED
+                review_status=ReviewStatusChoices.REJECTED
             )
 
     from django.db import transaction
