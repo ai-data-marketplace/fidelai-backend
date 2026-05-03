@@ -17,8 +17,8 @@ from .models import (
 
 @admin.register(ExtractedDocument)
 class ExtractedDocumentAdmin(admin.ModelAdmin):
-	list_display = ("id", "raw_document", "processed_at", "created_at")
-	list_filter = ("processed_at", "created_at")
+	list_display = ("id", "raw_document", "chunking_status", "processed_at", "created_at")
+	list_filter = ("chunking_status", "processed_at", "created_at")
 	search_fields = ("id", "raw_document__id", "raw_document__title")
 	raw_id_fields = ("raw_document",)
 	ordering = ("-processed_at",)

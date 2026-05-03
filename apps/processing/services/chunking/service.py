@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from apps.processing.models import Chunk, ExtractedDocument
+from django.db import transaction
+
+from apps.processing.models import Chunk, ExtractedDocument, ExtractedDocumentChunkingStatusChoices
 
 from .persistence import ChunkPersistenceEngine
 from .planning import ChunkPlanningEngine
@@ -37,4 +39,12 @@ class DocumentChunkingPipelineService:
             target_tokens=target_tokens,
             max_tokens=max_tokens,
         )
-        return self._persistence.persist_chunks(extracted_document=extracted_document, spans=planned_spans)
+        chunks = self._persistence.persist_chunks(extracted_document=extracted_document, spans=planned_spans)
+
+        with transaction.atomic():
+            extracted_document = ExtractedDocument.objects.select_for_update().get(pk=extracted_document.pk)
+            if extracted_document.chunking_status != ExtractedDocumentChunkingStatusChoices.CHUNKED:
+                extracted_document.chunking_status = ExtractedDocumentChunkingStatusChoices.CHUNKED
+                extracted_document.save(update_fields=["chunking_status", "updated_at"])
+
+        return chunks

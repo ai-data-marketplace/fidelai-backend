@@ -46,11 +46,22 @@ class ChunkStatusChoices(models.TextChoices):
     REJECTED = "rejected", "Rejected"
 
 
+class ExtractedDocumentChunkingStatusChoices(models.TextChoices):
+    PENDING = "pending", "Pending"
+    CHUNKED = "chunked", "Chunked"
+
+
 class ExtractedDocument(TimeStampedModel):
     raw_document = models.OneToOneField(
         "documents.RawDocument",
         on_delete=models.CASCADE,
         related_name="extracted_document",
+    )
+    chunking_status = models.CharField(
+        max_length=20,
+        choices=ExtractedDocumentChunkingStatusChoices.choices,
+        default=ExtractedDocumentChunkingStatusChoices.PENDING,
+        db_index=True,
     )
     full_text = models.TextField()
     structure = models.JSONField(default=list)
@@ -63,6 +74,7 @@ class ExtractedDocument(TimeStampedModel):
         ordering = ("-processed_at",)
         indexes = [
             models.Index(fields=["processed_at"]),
+            models.Index(fields=["chunking_status"]),
             models.Index(fields=["language_detected"]),
         ]
 

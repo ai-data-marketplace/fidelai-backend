@@ -8,6 +8,7 @@ from apps.processing.models import (
     Chunk,
     ChunkStatusChoices,
     ExtractedDocument,
+    ExtractedDocumentChunkingStatusChoices,
     TaskChunk,
 )
 
@@ -23,6 +24,10 @@ class NoChunksFoundError(Exception):
 
 
 class MissingDomainError(Exception):
+    pass
+
+
+class ChunkingNotCompleteError(Exception):
     pass
 
 
@@ -127,7 +132,7 @@ class TaskCreationService:
             ExtractedDocument.objects.select_related("raw_document", "raw_document__user")
             .prefetch_related(
                 "raw_document__files",
-                Prefetch("chunks", queryset=Chunk.objects.order_by("order_index")),
+                Prefetch("chunks", queryset=Chunk.objects.filter(status=ChunkStatusChoices.PENDING).order_by("order_index")),
             )
             .filter(pk=extracted_document_id)
         )
@@ -138,15 +143,20 @@ class TaskCreationService:
         if not extracted_document:
             raise DocumentNotFoundError(f"ExtractedDocument {extracted_document_id} does not exist")
 
+        if extracted_document.chunking_status != ExtractedDocumentChunkingStatusChoices.CHUNKED:
+            raise ChunkingNotCompleteError(
+                f"ExtractedDocument {extracted_document_id} has not completed chunking yet"
+            )
+
         domain = getattr(extracted_document.raw_document, "domain", None)
         if not domain:
             raise MissingDomainError(
                 f"RawDocument {extracted_document.raw_document_id} is missing domain information"
             )
 
-        chunks = list(extracted_document.chunks.all())
+        chunks = list(extracted_document.chunks.filter(status=ChunkStatusChoices.PENDING).order_by("order_index"))
         if not chunks:
-            raise NoChunksFoundError(f"No chunks found for ExtractedDocument {extracted_document_id}")
+            raise NoChunksFoundError(f"No pending chunks found for ExtractedDocument {extracted_document_id}")
 
         return extracted_document, chunks
 

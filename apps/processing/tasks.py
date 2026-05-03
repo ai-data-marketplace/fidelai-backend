@@ -6,12 +6,13 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, OperationalError
 
 from apps.documents.models import ProcessingStatusChoices, RawDocument
-from apps.processing.models import Chunk, ExtractedDocument
+from apps.processing.models import Chunk, ExtractedDocument, ExtractedDocumentChunkingStatusChoices
 
 from .services.pipeline import DocumentProcessingPipelineService
 from .services.chunking import DocumentChunkingPipelineService
 from .services.task_creation_service import (
     DocumentNotFoundError,
+    ChunkingNotCompleteError,
     MissingDomainError,
     NoChunksFoundError,
     TaskCreationService,
@@ -59,6 +60,17 @@ def CreateAnnotationTaskFromExtractedDocument(
         )
         return result
     except (NoChunksFoundError, MissingDomainError, DocumentNotFoundError) as exc:
+        logger.warning(
+            "Task creation skipped for ExtractedDocument %s: %s",
+            extracted_document_id,
+            exc,
+        )
+        return {
+            "created": False,
+            "existing": False,
+            "reason": str(exc),
+        }
+    except ChunkingNotCompleteError as exc:
         logger.warning(
             "Task creation skipped for ExtractedDocument %s: %s",
             extracted_document_id,
@@ -171,6 +183,10 @@ def ChunkExtractedDocument(self, extracted_document_id: str):
 
     existing_count = Chunk.objects.filter(extracted_document=extracted).count()
     if existing_count:
+        if extracted.chunking_status != ExtractedDocumentChunkingStatusChoices.CHUNKED:
+            ExtractedDocument.objects.filter(pk=extracted.pk).update(
+                chunking_status=ExtractedDocumentChunkingStatusChoices.CHUNKED,
+            )
         return {
             "extracted_document_id": str(extracted.pk),
             "chunk_count": int(existing_count),
@@ -179,6 +195,9 @@ def ChunkExtractedDocument(self, extracted_document_id: str):
 
     try:
         chunks = DocumentChunkingPipelineService().chunk(extracted)
+        ExtractedDocument.objects.filter(pk=extracted.pk).update(
+            chunking_status=ExtractedDocumentChunkingStatusChoices.CHUNKED,
+        )
         return {
             "extracted_document_id": str(extracted.pk),
             "chunk_count": int(len(chunks)),
@@ -199,7 +218,10 @@ def ChunkExtractedDocument(self, extracted_document_id: str):
 def DispatchPendingChunking(batch_size: int = 25):
     """Queue chunking tasks for ExtractedDocuments that don't yet have chunks."""
     pending_ids = list(
-        ExtractedDocument.objects.filter(chunks__isnull=True)
+        ExtractedDocument.objects.filter(
+            chunking_status=ExtractedDocumentChunkingStatusChoices.PENDING,
+            chunks__isnull=True,
+        )
         .order_by("processed_at")
         .values_list("id", flat=True)[:batch_size]
     )
@@ -217,7 +239,10 @@ def DispatchPendingChunking(batch_size: int = 25):
 def DispatchPendingTaskCreation(batch_size: int = 25, max_chunks_per_task: int = 30):
     """Queue task-creation jobs for chunked ExtractedDocuments that do not yet have AnnotationTasks."""
     pending_ids = list(
-        ExtractedDocument.objects.filter(chunks__isnull=False, annotation_tasks__isnull=True)
+        ExtractedDocument.objects.filter(
+            chunking_status=ExtractedDocumentChunkingStatusChoices.CHUNKED,
+            annotation_tasks__isnull=True,
+        )
         .order_by("processed_at")
         .values_list("id", flat=True)[:batch_size]
     )

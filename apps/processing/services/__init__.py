@@ -11,6 +11,7 @@ from .chunking import DocumentChunkingPipelineService
 from .task_creation_service import (
     DocumentNotFoundError,
     DuplicateTaskError,
+    ChunkingNotCompleteError,
     MissingDomainError,
     NoChunksFoundError,
     TaskCreationService,
@@ -39,6 +40,7 @@ __all__ = [
     "TaskCreationService",
     "DocumentNotFoundError",
     "NoChunksFoundError",
+    "ChunkingNotCompleteError",
     "MissingDomainError",
     "DuplicateTaskError",
     "TaskAssignmentService",

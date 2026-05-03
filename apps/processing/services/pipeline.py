@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.documents.models import ProcessingStatusChoices
-from apps.processing.models import ExtractedDocument
+from apps.processing.models import ExtractedDocument, ExtractedDocumentChunkingStatusChoices
 
 from .assembler import DocumentStructureAssemblerService
 from .document_loader import DocumentIngestionService
@@ -102,7 +102,7 @@ class DocumentProcessingPipelineService:
 
         extracted_document, _ = ExtractedDocument.objects.update_or_create(
             raw_document=raw_document,
-            defaults=asdict(payload),
+            defaults={**asdict(payload), "chunking_status": ExtractedDocumentChunkingStatusChoices.PENDING},
         )
 
         # Mark source document as completed after successful persistence.
