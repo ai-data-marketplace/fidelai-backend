@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, F, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.processing.models import Annotation, Chunk, TaskAssignment, TaskAssignmentStatusChoices, TaskChunk
+from apps.processing.models import Annotation, Chunk, ChunkStatusChoices, TaskAssignment, TaskAssignmentStatusChoices, TaskChunk
 
 
 class AnnotationExecutionService:
@@ -14,6 +15,7 @@ class AnnotationExecutionService:
         TaskAssignmentStatusChoices.ACCEPTED,
         TaskAssignmentStatusChoices.IN_PROGRESS,
     )
+    CONSENSUS_ANNOTATIONS_PER_CHUNK = 3
 
     def get_my_assignments_queryset(self, user, status: str | None = None):
         queryset = (
@@ -119,12 +121,43 @@ class AnnotationExecutionService:
                 **validated_data,
             )
 
+            self.update_chunk_status_after_annotation(chunk=chunk, task_id=assignment.task_id)
+
             if assignment.status == TaskAssignmentStatusChoices.ACCEPTED:
                 assignment.status = TaskAssignmentStatusChoices.IN_PROGRESS
 
             assignment = self.auto_complete_assignment(assignment)
 
         return annotation, assignment
+
+    def update_chunk_status_after_annotation(self, *, chunk: Chunk, task_id):
+        chunk = Chunk.objects.select_for_update().get(pk=chunk.pk)
+
+        annotation_count = (
+            Annotation.objects.filter(
+                chunk=chunk,
+                task_assignment__task_id=task_id,
+            )
+            .values("annotator_id")
+            .distinct()
+            .count()
+        )
+
+        consensus_target = getattr(
+            settings,
+            "PROCESSING_CONSENSUS_ANNOTATIONS_PER_CHUNK",
+            self.CONSENSUS_ANNOTATIONS_PER_CHUNK,
+        )
+
+        if annotation_count >= consensus_target:
+            if chunk.status != ChunkStatusChoices.ANNOTATED:
+                chunk.status = ChunkStatusChoices.ANNOTATED
+                chunk.save(update_fields=["status", "updated_at"])
+            return
+
+        if chunk.status != ChunkStatusChoices.IN_ANNOTATION:
+            chunk.status = ChunkStatusChoices.IN_ANNOTATION
+            chunk.save(update_fields=["status", "updated_at"])
 
     def calculate_assignment_progress(self, assignment: TaskAssignment):
         total_chunks = assignment.task.total_chunks or assignment.task.task_chunks.count()

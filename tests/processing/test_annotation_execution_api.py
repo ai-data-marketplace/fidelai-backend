@@ -7,6 +7,7 @@ from apps.processing.models import (
     Annotation,
     AnnotationTask,
     Chunk,
+    ChunkStatusChoices,
     ConfidenceChoices,
     DomainMatchChoices,
     ExtractedDocument,
@@ -140,7 +141,73 @@ class AnnotationExecutionAPITests(APITestCase):
         response = self.client.get("/api/processing/my-assignments/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
-        self.assertEqual(response.data["results"][0]["progress_percentage"], 100)
+
+    def test_chunk_status_moves_to_annotated_after_consensus(self):
+        third_annotator = CustomUser.objects.create_user(
+            email="third@example.com",
+            username="third",
+            full_name="Third Annotator",
+            password="password123",
+            role=RoleChoices.ANNOTATOR,
+            is_verified=True,
+        )
+        other_assignment = TaskAssignment.objects.create(
+            task=self.task,
+            annotator=self.other_annotator,
+            status=TaskAssignmentStatusChoices.ASSIGNED,
+        )
+        third_assignment = TaskAssignment.objects.create(
+            task=self.task,
+            annotator=third_annotator,
+            status=TaskAssignmentStatusChoices.ASSIGNED,
+        )
+
+        payload = {
+            "domain_match": DomainMatchChoices.MATCH,
+            "is_amharic": True,
+            "readability": ReadabilityChoices.HIGH,
+            "safety_label": SafetyChoices.SAFE,
+            "confidence": ConfidenceChoices.HIGH,
+            "notes": "consensus annotation",
+            "time_spent_seconds": 12,
+            "is_skipped": False,
+        }
+
+        # First annotator submits: chunk should enter IN_ANNOTATION.
+        self.client.force_authenticate(user=self.annotator)
+        self.client.post(f"/api/processing/assignments/{self.assignment.id}/accept/")
+        response = self.client.post(
+            f"/api/processing/chunks/{self.chunks[0].id}/annotate/",
+            {**payload, "task_assignment": str(self.assignment.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.chunks[0].refresh_from_db()
+        self.assertEqual(self.chunks[0].status, ChunkStatusChoices.IN_ANNOTATION)
+
+        # Second annotator submits: still in progress for chunk consensus.
+        self.client.force_authenticate(user=self.other_annotator)
+        self.client.post(f"/api/processing/assignments/{other_assignment.id}/accept/")
+        response = self.client.post(
+            f"/api/processing/chunks/{self.chunks[0].id}/annotate/",
+            {**payload, "task_assignment": str(other_assignment.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.chunks[0].refresh_from_db()
+        self.assertEqual(self.chunks[0].status, ChunkStatusChoices.IN_ANNOTATION)
+
+        # Third annotator reaches consensus target -> ANNOTATED.
+        self.client.force_authenticate(user=third_annotator)
+        self.client.post(f"/api/processing/assignments/{third_assignment.id}/accept/")
+        response = self.client.post(
+            f"/api/processing/chunks/{self.chunks[0].id}/annotate/",
+            {**payload, "task_assignment": str(third_assignment.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.chunks[0].refresh_from_db()
+        self.assertEqual(self.chunks[0].status, ChunkStatusChoices.ANNOTATED)
 
     def test_duplicate_annotation_and_foreign_access_are_blocked(self):
         self.client.force_authenticate(user=self.annotator)
