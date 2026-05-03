@@ -19,6 +19,7 @@ from .services.task_creation_service import (
 )
 from .services.task_assignment_service import TaskAssignmentService
 from .services.consensus_service import ConsensusPipelineService
+from .services.expert_task_creation_service import ExpertTaskCreationService
 
 
 logger = logging.getLogger(__name__)
@@ -283,5 +284,23 @@ def DispatchPendingConsensus(batch_size: int = 100):
         result.get("approved", 0),
         result.get("escalated", 0),
         result.get("avg_agreement", 0.0),
+    )
+    return result
+
+
+@shared_task
+def DispatchPendingExpertTasks(batch_size: int = 100, max_chunks_per_task: int = 10):
+    """Create expert review tasks from escalated chunks."""
+    result = ExpertTaskCreationService().create_expert_tasks_from_escalated_chunks(
+        max_chunks_per_task=max_chunks_per_task,
+        chunk_limit=batch_size,
+    )
+    logger.info(
+        "Expert task dispatch completed: escalated=%s tasks_created=%s chunks_linked=%s domains=%s errors=%s",
+        result.get("total_escalated_chunks_found", 0),
+        result.get("tasks_created", 0),
+        result.get("chunks_linked", 0),
+        len(result.get("domains_processed", [])),
+        result.get("errors", 0),
     )
     return result

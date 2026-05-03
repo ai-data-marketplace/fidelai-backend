@@ -150,7 +150,7 @@ class ConsensusAdmin(admin.ModelAdmin):
 
 @admin.register(ExpertTask)
 class ExpertTaskAdmin(admin.ModelAdmin):
-	list_display = ("id", "name", "domain", "created_at")
+	list_display = ("id", "name", "domain", "total_chunks", "created_from_consensus", "created_at")
 	list_filter = ("domain", "created_at")
 	search_fields = ("id", "name")
 	ordering = ("-created_at",)

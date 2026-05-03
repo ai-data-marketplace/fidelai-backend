@@ -18,6 +18,7 @@ from .task_creation_service import (
 )
 from .task_assignment_service import TaskAssignmentService
 from .consensus_service import ConsensusPipelineService
+from .expert_task_creation_service import ExpertTaskCreationService
 
 __all__ = [
     "IngestionResult",
@@ -46,4 +47,5 @@ __all__ = [
     "DuplicateTaskError",
     "TaskAssignmentService",
     "ConsensusPipelineService",
+    "ExpertTaskCreationService",
 ]

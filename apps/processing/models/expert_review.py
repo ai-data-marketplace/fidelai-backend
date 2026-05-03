@@ -14,6 +14,8 @@ from apps.processing.models.chunk import (
 class ExpertTask(TimeStampedModel):
     name = models.CharField(max_length=255)
     domain = models.CharField(max_length=20, choices=DomainChoices.choices)
+    total_chunks = models.PositiveIntegerField(default=0)
+    created_from_consensus = models.BooleanField(default=True)
 
     class Meta:
         ordering = ("-created_at",)
