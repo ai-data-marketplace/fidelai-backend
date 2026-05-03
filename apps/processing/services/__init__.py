@@ -17,6 +17,7 @@ from .task_creation_service import (
     TaskCreationService,
 )
 from .task_assignment_service import TaskAssignmentService
+from .consensus_service import ConsensusPipelineService
 
 __all__ = [
     "IngestionResult",
@@ -44,4 +45,5 @@ __all__ = [
     "MissingDomainError",
     "DuplicateTaskError",
     "TaskAssignmentService",
+    "ConsensusPipelineService",
 ]

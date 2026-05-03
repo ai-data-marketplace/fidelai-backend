@@ -133,6 +133,7 @@ CELERY_PROCESSING_BATCH_SIZE = env.int('CELERY_PROCESSING_BATCH_SIZE', default=2
 CELERY_CHUNKING_BATCH_SIZE = env.int('CELERY_CHUNKING_BATCH_SIZE', default=25)
 CELERY_TASK_CREATION_BATCH_SIZE = env.int('CELERY_TASK_CREATION_BATCH_SIZE', default=25)
 CELERY_MAX_CHUNKS_PER_TASK = env.int('CELERY_MAX_CHUNKS_PER_TASK', default=30)
+CELERY_CONSENSUS_BATCH_SIZE = env.int('CELERY_CONSENSUS_BATCH_SIZE', default=100)
 CELERY_BEAT_SCHEDULE = {
     'dispatch-pending-document-processing': {
         'task': 'apps.processing.tasks.DispatchPendingDocumentProcessing',
@@ -152,6 +153,11 @@ CELERY_BEAT_SCHEDULE = {
     'dispatch-pending-task-assignments': {
         'task': 'apps.processing.tasks.DispatchPendingTaskAssignments',
         'schedule': crontab(minute='*/5'),
+    },
+    'dispatch-pending-consensus': {
+        'task': 'apps.processing.tasks.DispatchPendingConsensus',
+        'schedule': crontab(minute='*/2'),
+        'args': (CELERY_CONSENSUS_BATCH_SIZE,),
     },
 }
 

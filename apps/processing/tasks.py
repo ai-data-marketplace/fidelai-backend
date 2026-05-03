@@ -18,6 +18,7 @@ from .services.task_creation_service import (
     TaskCreationService,
 )
 from .services.task_assignment_service import TaskAssignmentService
+from .services.consensus_service import ConsensusPipelineService
 
 
 logger = logging.getLogger(__name__)
@@ -268,5 +269,19 @@ def DispatchPendingTaskAssignments():
         "Task assignment dispatch completed: tasks_scanned=%s assignments_created=%s",
         result.get("tasks_scanned", 0),
         result.get("assignments_created", 0),
+    )
+    return result
+
+
+@shared_task
+def DispatchPendingConsensus(batch_size: int = 100):
+    """Compute consensus for eligible chunks and update their status."""
+    result = ConsensusPipelineService().run_pipeline(batch_size=batch_size)
+    logger.info(
+        "Consensus dispatch completed: processed=%s approved=%s escalated=%s avg_agreement=%.3f",
+        result.get("processed", 0),
+        result.get("approved", 0),
+        result.get("escalated", 0),
+        result.get("avg_agreement", 0.0),
     )
     return result
