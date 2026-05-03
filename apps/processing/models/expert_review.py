@@ -7,6 +7,7 @@ from apps.processing.models.chunk import (
     ConfidenceChoices,
     DomainMatchChoices,
     ReadabilityChoices,
+    TaskAssignmentStatusChoices,
     SafetyChoices,
 )
 
@@ -54,6 +55,38 @@ class ExpertTaskChunk(TimeStampedModel):
 
     def __str__(self):
         return f"ExpertTaskChunk<{self.expert_task_id}:{self.chunk_id}>"
+
+
+class ExpertTaskAssignment(TimeStampedModel):
+    expert_task = models.ForeignKey(
+        ExpertTask,
+        on_delete=models.CASCADE,
+        related_name="expert_assignments",
+    )
+    expert = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.CASCADE,
+        related_name="expert_task_assignments",
+    )
+    status = models.CharField(max_length=20, choices=TaskAssignmentStatusChoices.choices, default=TaskAssignmentStatusChoices.ASSIGNED)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ("-assigned_at",)
+        constraints = [
+            models.UniqueConstraint(fields=["expert_task"], name="one_expert_per_task"),
+            models.UniqueConstraint(fields=["expert_task", "expert"], name="uniq_experttaskassignment_task_expert"),
+        ]
+        indexes = [
+            models.Index(fields=["expert_task"]),
+            models.Index(fields=["expert"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"ExpertTaskAssignment<{self.expert_task_id}:{self.expert_id}:{self.status}>"
 
 
 class ExpertReview(TimeStampedModel):

@@ -12,7 +12,7 @@ from .chunk import (
     TaskAssignmentStatusChoices,
 )
 from .consensus import Consensus
-from .expert_review import ExpertReview, ExpertTask, ExpertTaskChunk
+from .expert_review import ExpertReview, ExpertTask, ExpertTaskChunk, ExpertTaskAssignment
 from .annotation_tasks import AnnotationTask, TaskAssignment, TaskChunk
 
 __all__ = [
@@ -33,5 +33,6 @@ __all__ = [
     "Consensus",
     "ExpertTask",
     "ExpertTaskChunk",
+    "ExpertTaskAssignment",
     "ExpertReview",
 ]

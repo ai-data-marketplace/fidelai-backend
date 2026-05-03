@@ -20,6 +20,7 @@ from .services.task_creation_service import (
 from .services.task_assignment_service import TaskAssignmentService
 from .services.consensus_service import ConsensusPipelineService
 from .services.expert_task_creation_service import ExpertTaskCreationService
+from .services.expert_task_assignment_service import ExpertTaskAssignmentService
 
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,21 @@ def DispatchPendingExpertTasks(batch_size: int = 100, max_chunks_per_task: int =
         result.get("tasks_created", 0),
         result.get("chunks_linked", 0),
         len(result.get("domains_processed", [])),
+        result.get("errors", 0),
+    )
+    return result
+
+
+@shared_task
+def DispatchPendingExpertTaskAssignments(batch_size: int = 50):
+    """Assign expert tasks to eligible experts."""
+    result = ExpertTaskAssignmentService().assign_expert_tasks(batch_size=batch_size)
+    logger.info(
+        "Expert task assignment dispatch completed: tasks_scanned=%s assignments_created=%s tasks_skipped=%s overloaded_experts=%s errors=%s",
+        result.get("tasks_scanned", 0),
+        result.get("assignments_created", 0),
+        result.get("tasks_skipped", 0),
+        result.get("overloaded_experts", 0),
         result.get("errors", 0),
     )
     return result

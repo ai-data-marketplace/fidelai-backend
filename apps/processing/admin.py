@@ -9,6 +9,7 @@ from .models import (
 	ExpertReview,
 	ExpertTask,
 	ExpertTaskChunk,
+	ExpertTaskAssignment,
 	ExtractedDocument,
 	TaskAssignment,
 	TaskChunk,
@@ -162,6 +163,14 @@ class ExpertTaskChunkAdmin(admin.ModelAdmin):
 	list_filter = ("created_at",)
 	search_fields = ("id", "expert_task__name", "expert_task__id", "chunk__id")
 	raw_id_fields = ("expert_task", "chunk")
+
+
+@admin.register(ExpertTaskAssignment)
+class ExpertTaskAssignmentAdmin(admin.ModelAdmin):
+	list_display = ("id", "expert_task", "expert", "status", "assigned_at", "started_at", "completed_at")
+	list_filter = ("status", "assigned_at", "completed_at")
+	search_fields = ("id", "expert_task__name", "expert_task__id", "expert__email", "expert__username")
+	raw_id_fields = ("expert_task", "expert")
 
 
 @admin.register(ExpertReview)
