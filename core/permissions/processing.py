@@ -5,6 +5,14 @@ from apps.users.models.applications import RoleApplication
 from apps.users.models.roles import RoleApplicationStatusChoices
 
 
+class IsAdmin(BasePermission):
+    message = "User must have admin role."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and user.role == RoleChoices.ADMIN)
+
+
 class IsAnnotator(BasePermission):
     message = "You do not have permission to access this assignment."
 
