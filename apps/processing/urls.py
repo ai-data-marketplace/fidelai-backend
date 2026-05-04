@@ -25,8 +25,8 @@ urlpatterns = [
 	path("assignments/<uuid:id>/progress/", TaskAssignmentProgressView.as_view(), name="assignment-progress"),
 		# Expert review endpoints
 		path("expert/tasks/", ExpertTaskListAPIView.as_view(), name="expert-tasks-list"),
-		path("expert/tasks/<int:id>/accept/", ExpertTaskAcceptAPIView.as_view(), name="expert-task-accept"),
-		path("expert/tasks/<int:id>/decline/", ExpertTaskDeclineAPIView.as_view(), name="expert-task-decline"),
-		path("expert/tasks/<int:id>/chunks/", ExpertTaskChunksAPIView.as_view(), name="expert-task-chunks"),
-		path("expert/chunks/<int:chunk_id>/resolve/", ExpertChunkResolveAPIView.as_view(), name="expert-chunk-resolve"),
+		path("expert/tasks/<uuid:id>/accept/", ExpertTaskAcceptAPIView.as_view(), name="expert-task-accept"),
+		path("expert/tasks/<uuid:id>/decline/", ExpertTaskDeclineAPIView.as_view(), name="expert-task-decline"),
+		path("expert/tasks/<uuid:id>/chunks/", ExpertTaskChunksAPIView.as_view(), name="expert-task-chunks"),
+		path("expert/chunks/<uuid:chunk_id>/resolve/", ExpertChunkResolveAPIView.as_view(), name="expert-chunk-resolve"),
 ]

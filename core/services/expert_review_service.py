@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.processing.models import ExpertTaskAssignment, ExpertTaskChunk, ExpertReview, Chunk
 from apps.processing.models.chunk import ChunkStatusChoices, TaskAssignmentStatusChoices
 from apps.processing.models import Annotation
+from apps.scoring.services import score_conflict_resolved, score_expert_review
 
 
 class ExpertReviewService:
@@ -107,7 +108,7 @@ class ExpertReviewService:
             if ExpertReview.objects.filter(chunk=chunk, expert=user).exists():
                 raise ValidationError({"detail": "Duplicate review"})
 
-            ExpertReview.objects.create(
+            expert_review = ExpertReview.objects.create(
                 chunk=chunk,
                 expert=user,
                 domain_match=validated_data.get("domain_match"),
@@ -118,6 +119,7 @@ class ExpertReviewService:
                 notes=validated_data.get("notes", ""),
                 resolution_reasoning=validated_data.get("resolution_reasoning", ""),
             )
+            score_expert_review(expert_review)
 
             final = validated_data["final_decision"]
             if final == ChunkStatusChoices.APPROVED:
@@ -126,6 +128,7 @@ class ExpertReviewService:
                 chunk.status = ChunkStatusChoices.REJECTED
             else:
                 chunk.status = ChunkStatusChoices.RESOLVED
+                score_conflict_resolved(expert_review)
 
             chunk.save(update_fields=["status", "updated_at"])
 

@@ -17,6 +17,7 @@ from apps.processing.models import (
     TaskAssignmentStatusChoices,
     TaskChunk,
 )
+from apps.scoring.models import ScoreActionTypeChoices, ScoreConfig, ScoreLog, UserScore
 from apps.users.models import CustomUser, RoleChoices
 
 
@@ -44,6 +45,12 @@ class AnnotationExecutionAPITests(APITestCase):
             full_name="Owner User",
             password="password123",
         )
+
+        ScoreConfig.objects.create(action_type=ScoreActionTypeChoices.ANNOTATION_SUBMITTED, points_value=5)
+        ScoreConfig.objects.create(action_type=ScoreActionTypeChoices.ANNOTATION_MATCH_CONSENSUS, points_value=8)
+        ScoreConfig.objects.create(action_type=ScoreActionTypeChoices.ANNOTATION_BELOW_THRESHOLD, points_value=-2)
+        UserScore.objects.create(user=self.annotator, total_points=0)
+        UserScore.objects.create(user=self.other_annotator, total_points=0)
 
         self.task, self.assignment, self.chunks = self._build_task_fixture()
 
@@ -123,6 +130,9 @@ class AnnotationExecutionAPITests(APITestCase):
         }
         response = self.client.post(f"/api/processing/chunks/{self.chunks[0].id}/annotate/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(ScoreLog.objects.filter(user=self.annotator, action_type=ScoreActionTypeChoices.ANNOTATION_SUBMITTED).count(), 1)
+        self.annotator.user_score.refresh_from_db()
+        self.assertEqual(self.annotator.user_score.total_points, 5)
         self.assignment.refresh_from_db()
         self.assertEqual(self.assignment.status, TaskAssignmentStatusChoices.IN_PROGRESS)
 
@@ -134,6 +144,9 @@ class AnnotationExecutionAPITests(APITestCase):
         payload["notes"] = "second chunk"
         response = self.client.post(f"/api/processing/chunks/{self.chunks[1].id}/annotate/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(ScoreLog.objects.filter(user=self.annotator, action_type=ScoreActionTypeChoices.ANNOTATION_SUBMITTED).count(), 2)
+        self.annotator.user_score.refresh_from_db()
+        self.assertEqual(self.annotator.user_score.total_points, 10)
         self.assignment.refresh_from_db()
         self.assertEqual(self.assignment.status, TaskAssignmentStatusChoices.SUBMITTED)
         self.assertIsNotNone(self.assignment.completed_at)

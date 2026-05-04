@@ -13,6 +13,7 @@ from apps.processing.models.chunk import (
     TaskAssignmentStatusChoices,
 )
 from apps.processing.models.consensus import Consensus
+from apps.scoring.services import score_annotation_consensus
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,10 @@ class ConsensusPipelineService:
 
                     self.update_chunk_status(chunk_for_update, result)
 
+                    for annotation in getattr(chunk, "valid_annotations", []):
+                        matches = self.compare_annotation_to_consensus(annotation, result)
+                        score_annotation_consensus(annotation, matches)
+
             except Exception:
                 logger.exception("Error processing consensus for chunk %s", chunk.id)
                 continue
@@ -173,6 +178,15 @@ class ConsensusPipelineService:
             "skipped_existing": skipped_existing,
             "avg_agreement": avg_agreement,
         }
+
+    @staticmethod
+    def compare_annotation_to_consensus(annotation, consensus_result):
+        return (
+            annotation.domain_match == consensus_result.get("final_domain_match")
+            and annotation.is_amharic == consensus_result.get("final_is_amharic")
+            and annotation.readability == consensus_result.get("final_readability")
+            and annotation.safety_label == consensus_result.get("final_safety_label")
+        )
 
 
 def compute_majority_vote(values):

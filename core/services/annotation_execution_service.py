@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.processing.models import Annotation, Chunk, ChunkStatusChoices, TaskAssignment, TaskAssignmentStatusChoices, TaskChunk
+from apps.scoring.services import score_annotation_submitted
 
 
 class AnnotationExecutionService:
@@ -120,6 +121,8 @@ class AnnotationExecutionService:
                 task_assignment=assignment,
                 **validated_data,
             )
+
+            score_annotation_submitted(annotation)
 
             self.update_chunk_status_after_annotation(chunk=chunk, task_id=assignment.task_id)
 
