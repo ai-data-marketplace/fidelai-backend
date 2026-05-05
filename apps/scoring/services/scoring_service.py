@@ -12,12 +12,17 @@ ANNOTATOR_ACTIONS = (
     ScoreActionTypeChoices.ANNOTATION_BELOW_THRESHOLD,
 )
 
+CONTRIBUTOR_ACTIONS = (
+    ScoreActionTypeChoices.DOCUMENT_APPROVED,
+)
+
 EXPERT_ACTIONS = (
     ScoreActionTypeChoices.EXPERT_REVIEW_COMPLETED,
     ScoreActionTypeChoices.CONFLICT_RESOLVED,
 )
 
 ROLE_ACTIONS = {
+    RoleChoices.CONTRIBUTOR: CONTRIBUTOR_ACTIONS,
     RoleChoices.ANNOTATOR: ANNOTATOR_ACTIONS,
     RoleChoices.EXPERT: EXPERT_ACTIONS,
 }
@@ -44,7 +49,18 @@ def award_points(*, user, role, action_type, chunk=None, document=None, dataset=
     with transaction.atomic():
         user_score, _ = UserScore.objects.select_for_update().get_or_create(user=user)
 
-        if ScoreLog.objects.filter(user=user, action_type=action_type, chunk=chunk).exists():
+        score_log_filter = {
+            "user": user,
+            "action_type": action_type,
+        }
+        if chunk is not None:
+            score_log_filter["chunk"] = chunk
+        elif document is not None:
+            score_log_filter["document"] = document
+        elif dataset is not None:
+            score_log_filter["dataset"] = dataset
+
+        if ScoreLog.objects.filter(**score_log_filter).exists():
             return None
 
         score_log = ScoreLog.objects.create(
@@ -106,4 +122,14 @@ def score_conflict_resolved(expert_review):
         action_type=ScoreActionTypeChoices.CONFLICT_RESOLVED,
         chunk=expert_review.chunk,
         metadata={"expert_review_id": str(expert_review.id)},
+    )
+
+
+def score_document_approved(raw_document):
+    return award_points(
+        user=raw_document.user,
+        role=RoleChoices.CONTRIBUTOR,
+        action_type=ScoreActionTypeChoices.DOCUMENT_APPROVED,
+        document=raw_document,
+        metadata={"raw_document_id": str(raw_document.id)},
     )

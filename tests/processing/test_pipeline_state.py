@@ -15,7 +15,9 @@ from apps.processing.models import (
 )
 from apps.processing.services.chunking import DocumentChunkingPipelineService
 from apps.processing.services.task_creation_service import ChunkingNotCompleteError, TaskCreationService
+from apps.scoring.models import ScoreActionTypeChoices, ScoreConfig, ScoreLog, UserScore
 from apps.users.models import CustomUser
+from apps.users.models.roles import RoleChoices
 
 
 class ProcessingPipelineStateTests(TestCase):
@@ -26,10 +28,24 @@ class ProcessingPipelineStateTests(TestCase):
             full_name="Owner User",
             password="password123",
         )
+        self.contributor = CustomUser.objects.create_user(
+            email="contributor@example.com",
+            username="contributor",
+            full_name="Contributor User",
+            password="password123",
+            role=RoleChoices.CONTRIBUTOR,
+            is_verified=True,
+        )
+
+        ScoreConfig.objects.create(
+            action_type=ScoreActionTypeChoices.DOCUMENT_APPROVED,
+            points_value=7,
+        )
+        UserScore.objects.create(user=self.contributor, total_points=0)
 
     def _create_extracted_document(self, *, chunking_status=ExtractedDocumentChunkingStatusChoices.PENDING, full_text="alpha beta gamma"):
         raw_document = RawDocument.objects.create(
-            user=self.owner,
+            user=self.contributor,
             title="Pipeline Doc",
             description="Fixture",
             domain="other",
@@ -118,3 +134,47 @@ class ProcessingPipelineStateTests(TestCase):
 
         with self.assertRaises(ChunkingNotCompleteError):
             TaskCreationService().create_task_for_extracted_document(extracted_document.id)
+
+    def test_successful_chunking_scores_document_approval_once(self):
+        extracted_document = self._create_extracted_document()
+        service = DocumentChunkingPipelineService()
+
+        fake_span = MagicMock()
+        fake_chunk = MagicMock()
+
+        with patch.object(service._planner, "flatten_structure", return_value=[]), patch.object(
+            service._planner,
+            "plan_chunk_spans",
+            return_value=[fake_span],
+        ), patch.object(service._persistence, "persist_chunks", return_value=[fake_chunk]):
+            result = service.chunk(extracted_document)
+
+        self.assertEqual(result, [fake_chunk])
+        self.assertEqual(
+            ScoreLog.objects.filter(
+                user=self.contributor,
+                action_type=ScoreActionTypeChoices.DOCUMENT_APPROVED,
+                document=extracted_document.raw_document,
+            ).count(),
+            1,
+        )
+        self.contributor.user_score.refresh_from_db()
+        self.assertEqual(self.contributor.user_score.total_points, 7)
+
+        with patch.object(service._planner, "flatten_structure", return_value=[]), patch.object(
+            service._planner,
+            "plan_chunk_spans",
+            return_value=[fake_span],
+        ), patch.object(service._persistence, "persist_chunks", return_value=[fake_chunk]):
+            service.chunk(extracted_document)
+
+        self.assertEqual(
+            ScoreLog.objects.filter(
+                user=self.contributor,
+                action_type=ScoreActionTypeChoices.DOCUMENT_APPROVED,
+                document=extracted_document.raw_document,
+            ).count(),
+            1,
+        )
+        self.contributor.user_score.refresh_from_db()
+        self.assertEqual(self.contributor.user_score.total_points, 7)

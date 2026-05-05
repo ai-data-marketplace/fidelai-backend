@@ -4,6 +4,7 @@ from .scoring_service import (
     score_annotation_submitted,
     score_conflict_resolved,
     score_expert_review,
+    score_document_approved,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "score_annotation_submitted",
     "score_conflict_resolved",
     "score_expert_review",
+    "score_document_approved",
 ]

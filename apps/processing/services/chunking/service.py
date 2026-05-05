@@ -4,6 +4,7 @@ from django.db import transaction
 
 from apps.documents.models import RawDocument, ReviewStatusChoices
 from apps.processing.models import Chunk, ExtractedDocument, ExtractedDocumentChunkingStatusChoices
+from apps.scoring.services import score_document_approved
 
 from .persistence import ChunkPersistenceEngine
 from .planning import ChunkPlanningEngine
@@ -51,6 +52,7 @@ class DocumentChunkingPipelineService:
                 extracted_document.save(update_fields=["chunking_status", "updated_at"])
 
         self._mark_raw_document_approved(extracted_document.raw_document)
+        score_document_approved(extracted_document.raw_document)
 
         return chunks
 
