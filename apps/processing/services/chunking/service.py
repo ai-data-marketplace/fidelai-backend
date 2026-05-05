@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.db import transaction
 
+from apps.documents.models import RawDocument, ReviewStatusChoices
 from apps.processing.models import Chunk, ExtractedDocument, ExtractedDocumentChunkingStatusChoices
 
 from .persistence import ChunkPersistenceEngine
@@ -29,6 +30,8 @@ class DocumentChunkingPipelineService:
         target_tokens: int = DEFAULT_TARGET_TOKENS,
         max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> list[Chunk]:
+        self._mark_raw_document_in_review(extracted_document.raw_document)
+
         if not extracted_document.full_text or not extracted_document.full_text.strip():
             return []
 
@@ -47,4 +50,16 @@ class DocumentChunkingPipelineService:
                 extracted_document.chunking_status = ExtractedDocumentChunkingStatusChoices.CHUNKED
                 extracted_document.save(update_fields=["chunking_status", "updated_at"])
 
+        self._mark_raw_document_approved(extracted_document.raw_document)
+
         return chunks
+
+    @staticmethod
+    def _mark_raw_document_in_review(raw_document: RawDocument) -> None:
+        if raw_document.review_status != ReviewStatusChoices.IN_REVIEW:
+            RawDocument.objects.filter(pk=raw_document.pk).update(review_status=ReviewStatusChoices.IN_REVIEW)
+
+    @staticmethod
+    def _mark_raw_document_approved(raw_document: RawDocument) -> None:
+        if raw_document.review_status != ReviewStatusChoices.APPROVED:
+            RawDocument.objects.filter(pk=raw_document.pk).update(review_status=ReviewStatusChoices.APPROVED)

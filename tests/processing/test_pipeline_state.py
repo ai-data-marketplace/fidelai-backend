@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.documents.models import RawDocument
+from apps.documents.models import ReviewStatusChoices
 from apps.processing.models import (
     AnnotationTask,
     Chunk,
@@ -46,23 +47,29 @@ class ProcessingPipelineStateTests(TestCase):
             processed_at=timezone.now(),
         )
 
-    def test_chunking_marks_extracted_document_chunked(self):
+    def test_chunking_marks_raw_document_in_review_then_approved(self):
         extracted_document = self._create_extracted_document()
         service = DocumentChunkingPipelineService()
 
         fake_span = MagicMock()
         fake_chunk = MagicMock()
 
+        def persist_chunks_side_effect(*, extracted_document, spans):
+            extracted_document.raw_document.refresh_from_db()
+            self.assertEqual(extracted_document.raw_document.review_status, ReviewStatusChoices.IN_REVIEW)
+            return [fake_chunk]
+
         with patch.object(service._planner, "flatten_structure", return_value=[]), patch.object(
             service._planner,
             "plan_chunk_spans",
             return_value=[fake_span],
-        ), patch.object(service._persistence, "persist_chunks", return_value=[fake_chunk]):
+        ), patch.object(service._persistence, "persist_chunks", side_effect=persist_chunks_side_effect):
             result = service.chunk(extracted_document)
 
         self.assertEqual(result, [fake_chunk])
         extracted_document.refresh_from_db()
         self.assertEqual(extracted_document.chunking_status, ExtractedDocumentChunkingStatusChoices.CHUNKED)
+        self.assertEqual(extracted_document.raw_document.review_status, ReviewStatusChoices.APPROVED)
 
     def test_task_creation_uses_only_pending_chunks(self):
         extracted_document = self._create_extracted_document(chunking_status=ExtractedDocumentChunkingStatusChoices.CHUNKED)
