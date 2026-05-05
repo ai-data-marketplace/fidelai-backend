@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.documents.models import RawDocument
+from apps.notifications.models import NotificationTemplate, NotificationTypeChoices
 from apps.processing.models import (
     Annotation,
     AnnotationTask,
@@ -51,6 +52,20 @@ class AnnotationExecutionAPITests(APITestCase):
         ScoreConfig.objects.create(action_type=ScoreActionTypeChoices.ANNOTATION_BELOW_THRESHOLD, points_value=-2)
         UserScore.objects.create(user=self.annotator, total_points=0)
         UserScore.objects.create(user=self.other_annotator, total_points=0)
+        NotificationTemplate.objects.create(
+            notification_type=NotificationTypeChoices.TASK_ASSIGNED,
+            category="tasks",
+            title_template="Assigned: {task_name}",
+            message_template="Task {task_name} has been assigned.",
+            active=True,
+        )
+        NotificationTemplate.objects.create(
+            notification_type=NotificationTypeChoices.TASK_COMPLETED,
+            category="tasks",
+            title_template="Completed: {task_name}",
+            message_template="Task {task_name} was completed.",
+            active=True,
+        )
 
         self.task, self.assignment, self.chunks = self._build_task_fixture()
 

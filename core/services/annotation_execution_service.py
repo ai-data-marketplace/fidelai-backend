@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, F, OuterRef, Q, Subquery
@@ -7,8 +9,12 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.notifications.services import notify_task_completed
 from apps.processing.models import Annotation, Chunk, ChunkStatusChoices, TaskAssignment, TaskAssignmentStatusChoices, TaskChunk
 from apps.scoring.services import score_annotation_submitted
+
+
+logger = logging.getLogger(__name__)
 
 
 class AnnotationExecutionService:
@@ -188,6 +194,14 @@ class AnnotationExecutionService:
             assignment.status = TaskAssignmentStatusChoices.SUBMITTED
             assignment.completed_at = timezone.now()
             assignment.save(update_fields=["status", "completed_at", "updated_at"])
+            try:
+                notify_task_completed(user=assignment.annotator, task=assignment.task)
+            except ValueError:
+                logger.warning(
+                    "Notification template missing for task completion task=%s annotator=%s",
+                    assignment.task_id,
+                    assignment.annotator_id,
+                )
         else:
             assignment.save(update_fields=["status", "updated_at"])
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
@@ -8,7 +10,11 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.processing.models import ExpertTaskAssignment, ExpertTaskChunk, ExpertReview, Chunk
 from apps.processing.models.chunk import ChunkStatusChoices, TaskAssignmentStatusChoices
 from apps.processing.models import Annotation
+from apps.notifications.services import notify_task_reviewed
 from apps.scoring.services import score_conflict_resolved, score_expert_review
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExpertReviewService:
@@ -131,6 +137,11 @@ class ExpertReviewService:
                 score_conflict_resolved(expert_review)
 
             chunk.save(update_fields=["status", "updated_at"])
+
+            try:
+                notify_task_reviewed(user=user, chunk_id=chunk.id)
+            except ValueError:
+                logger.warning("Notification template missing for expert review chunk=%s expert=%s", chunk.id, user.id)
 
             # check task completion
             total = ExpertTaskChunk.objects.filter(expert_task=etc.expert_task).count()

@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.documents.models import RawDocument
+from apps.notifications.models import NotificationTemplate, NotificationTypeChoices
 from apps.processing.models import (
     Chunk,
     ExpertReview,
@@ -44,6 +45,13 @@ class ExpertReviewAPITests(APITestCase):
         ScoreConfig.objects.create(action_type=ScoreActionTypeChoices.EXPERT_REVIEW_COMPLETED, points_value=12)
         ScoreConfig.objects.create(action_type=ScoreActionTypeChoices.CONFLICT_RESOLVED, points_value=20)
         UserScore.objects.create(user=self.expert, total_points=0)
+        NotificationTemplate.objects.create(
+            notification_type=NotificationTypeChoices.TASK_REVIEWED,
+            category="system",
+            title_template="Reviewed chunk {chunk_id}",
+            message_template="Chunk {chunk_id} has been reviewed.",
+            active=True,
+        )
 
         self.task, self.assignment, self.chunk = self._build_task_fixture()
 

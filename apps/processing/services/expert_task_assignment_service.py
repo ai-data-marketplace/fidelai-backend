@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Count, Max, Q, Value, DateTimeField
 from django.db.models.functions import Coalesce
 
+from apps.notifications.services import notify_adjudication_required
 from apps.processing.models.expert_review import ExpertTask, ExpertTaskAssignment
 from apps.processing.models.chunk import TaskAssignmentStatusChoices
 from apps.users.models import CustomUser, RoleApplicationStatusChoices, RoleChoices
@@ -78,6 +79,18 @@ class ExpertTaskAssignmentService:
                             expert=expert,
                             status=TaskAssignmentStatusChoices.ASSIGNED,
                         )
+
+                    first_chunk = locked_task.task_chunks.select_related("chunk").order_by("chunk__order_index").first()
+                    if first_chunk:
+                        try:
+                            notify_adjudication_required(user=expert, chunk_id=first_chunk.chunk_id)
+                        except ValueError:
+                            logger.warning(
+                                "Notification template missing for adjudication task=%s expert=%s chunk=%s",
+                                locked_task.pk,
+                                expert.pk,
+                                first_chunk.chunk_id,
+                            )
 
                 summary["assignments_created"] += 1
                 logger.info(

@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
+from apps.notifications.models import NotificationTemplate, NotificationTypeChoices
 from apps.processing.models import AnnotationTask, TaskAssignment, TaskAssignmentStatusChoices
 from apps.processing.services import TaskAssignmentService
 from apps.users.models import CustomUser, RoleChoices
@@ -11,6 +12,13 @@ from apps.users.models import CustomUser, RoleChoices
 class TaskAssignmentServiceTests(TestCase):
     def setUp(self):
         self.service = TaskAssignmentService()
+        NotificationTemplate.objects.create(
+            notification_type=NotificationTypeChoices.TASK_ASSIGNED,
+            category="tasks",
+            title_template="Assigned: {task_name}",
+            message_template="Task {task_name} has been assigned.",
+            active=True,
+        )
 
     def create_annotator(self, email, *, is_verified=True, is_active=True):
         return CustomUser.objects.create_user(

@@ -6,6 +6,7 @@ from django.db.models import Count, DateTimeField, Exists, Max, OuterRef, Q, Val
 from django.db.models.functions import Coalesce
 
 from apps.processing.models import AnnotationTask, TaskAssignment, TaskAssignmentStatusChoices
+from apps.notifications.services import notify_task_assigned
 from apps.users.models import CustomUser, RoleChoices
 
 
@@ -169,6 +170,10 @@ class TaskAssignmentService:
                     annotator=annotator,
                     status=TaskAssignmentStatusChoices.ASSIGNED,
                 )
+                try:
+                    notify_task_assigned(user=annotator, task=task)
+                except ValueError:
+                    logger.warning("Notification template missing for task assignment task=%s annotator=%s", task.pk, annotator.pk)
             return assignment, True, None
         except IntegrityError:
             assignment = TaskAssignment.objects.filter(task=task, annotator=annotator).first()
