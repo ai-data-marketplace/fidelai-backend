@@ -15,6 +15,12 @@ from apps.users.serializers import (
 	VerifyEmailSerializer,
 )
 from core.services.auth_service import AuthService, AuthServiceError
+from .role_management import (
+	ApproveRoleApplicationView,
+	AdminUserListView,
+	PendingRoleApplicationListView,
+	RejectRoleApplicationView,
+)
 
 
 class RegisterView(APIView):

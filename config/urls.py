@@ -11,13 +11,10 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('api/auth/', include('apps.users.urls')),
     path('api/scoring/', include('apps.scoring.urls')),
-    # path('api/v1/documents/', include('apps.documents.urls')),
     path('api/documents/', include('apps.documents.urls')),
     path('api/processing/', include('apps.processing.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     # path('api/v1/datasets/', include('apps.datasets.urls')),
     # path('api/v1/marketplace/', include('apps.marketplace.urls')),
-    # path('api/v1/scoring/', include('apps.scoring.urls')),
     # path('api/v1/payments/', include('apps.payments.urls')),
-    # path('api/v1/notifications/', include('apps.notifications.urls')),
 ]

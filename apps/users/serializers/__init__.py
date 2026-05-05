@@ -53,3 +53,18 @@ class UserSerializer(serializers.Serializer):
     full_name = serializers.CharField(read_only=True)
     role = serializers.CharField(read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
+
+
+from .role_management import RoleApplicationAdminSerializer, RoleApplicationUserSummarySerializer
+
+__all__ = [
+    "RegisterSerializer",
+    "VerifyEmailSerializer",
+    "ResendCodeSerializer",
+    "LoginSerializer",
+    "ForgotPasswordSerializer",
+    "ResetPasswordSerializer",
+    "UserSerializer",
+    "RoleApplicationAdminSerializer",
+    "RoleApplicationUserSummarySerializer",
+]
