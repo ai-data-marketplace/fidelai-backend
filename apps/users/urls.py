@@ -10,6 +10,7 @@ from apps.users.views import (
 	RegisterView,
 	ResendCodeView,
 	RejectRoleApplicationView,
+	ApplicationStatusView,
 	ResetPasswordView,
 	VerifyEmailView,
 )
@@ -23,6 +24,7 @@ urlpatterns = [
 	path("resend-code/", ResendCodeView.as_view(), name="auth-resend-code"),
 	path("login/", LoginView.as_view(), name="auth-login"),
 	path("me/", MeView.as_view(), name="auth-me"),
+	path("application-status/", ApplicationStatusView.as_view(), name="application-status"),
 	path("onboarding/complete/", OnboardingView.as_view(), name="onboarding-complete"),
 	path("admin/users/", AdminUserListView.as_view(), name="admin-users"),
 	path("admin/role-applications/", PendingRoleApplicationListView.as_view(), name="admin-role-applications"),

@@ -52,3 +52,13 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     def get_status(self, obj):
         return "active" if obj.is_active else "inactive"
 
+
+class ApplicationStatusSerializer(serializers.Serializer):
+    role = serializers.CharField()
+    is_verified = serializers.BooleanField()
+    has_application = serializers.BooleanField()
+    application_id = serializers.UUIDField(allow_null=True, required=False)
+    application_status = serializers.CharField(allow_null=True, required=False)
+    role_applied_for = serializers.CharField(allow_null=True, required=False)
+    submitted_at = serializers.DateTimeField(allow_null=True, required=False)
+

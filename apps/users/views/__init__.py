@@ -21,6 +21,8 @@ from .role_management import (
 	PendingRoleApplicationListView,
 	RejectRoleApplicationView,
 )
+from apps.users.serializers.role_management import ApplicationStatusSerializer
+from apps.users.models import RoleApplication, RoleApplicationStatusChoices
 
 
 class RegisterView(APIView):
@@ -150,4 +152,57 @@ class MeView(APIView):
 	@extend_schema(responses={200: UserSerializer})
 	def get(self, request):
 		serializer = UserSerializer(request.user)
+		return Response(serializer.data)
+
+
+class ApplicationStatusView(APIView):
+	"""Return onboarding / role-application status for the authenticated user.
+
+	Response fields:
+	- role: user's current role
+	- is_verified: whether email is verified
+	- has_application: whether a role application exists
+	- application_status: one of RoleApplicationStatusChoices or null
+	- role_applied_for: role requested in the latest application or null
+	- application_id: UUID of latest application or null
+	- submitted_at: ISO timestamp of latest application or null
+	"""
+
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: ApplicationStatusSerializer})
+	def get(self, request):
+		user = request.user
+
+		latest_app = (
+			RoleApplication.objects.filter(user=user)
+			.order_by("-submitted_at")
+			.first()
+		)
+
+		if latest_app:
+			app_data = {
+				"application_id": str(latest_app.id),
+				"application_status": latest_app.status,
+				"role_applied_for": latest_app.role_applied_for,
+				"submitted_at": latest_app.submitted_at.isoformat() if latest_app.submitted_at else None,
+			}
+			has_application = True
+		else:
+			app_data = {
+				"application_id": None,
+				"application_status": None,
+				"role_applied_for": None,
+				"submitted_at": None,
+			}
+			has_application = False
+
+		data = {
+			"role": user.role,
+			"is_verified": user.is_verified,
+			"has_application": has_application,
+		}
+		data.update(app_data)
+
+		serializer = ApplicationStatusSerializer(data)
 		return Response(serializer.data)
