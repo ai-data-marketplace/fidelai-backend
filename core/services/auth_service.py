@@ -185,7 +185,7 @@ class AuthService:
 
         frontend_url = settings.FRONTEND_URL.rstrip("/")
 
-        reset_link = f"{frontend_url}/account/reset-password/{uid}/{token}/"
+        reset_link = f"{frontend_url}/reset-password/{uid}/{token}/"
         send_password_reset_email(user, reset_link)
 
     @classmethod
