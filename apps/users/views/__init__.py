@@ -58,11 +58,25 @@ class VerifyEmailView(APIView):
 		serializer.is_valid(raise_exception=True)
 
 		try:
-			AuthService.verify_email_code(**serializer.validated_data)
+			user = AuthService.verify_email_code(**serializer.validated_data)
 		except AuthServiceError as exc:
 			return Response({"message": exc.message}, status=exc.status_code)
 
-		return Response({"message": "Email verified successfully"}, status=status.HTTP_200_OK)
+		refresh = RefreshToken.for_user(user)
+		return Response(
+			{
+				"message": "Email verified successfully",
+				"access": str(refresh.access_token),
+				"refresh": str(refresh),
+				"user": {
+					"id": str(user.id),
+					"email": user.email,
+					"full_name": user.full_name,
+					"role": user.role,
+				},
+			},
+			status=status.HTTP_200_OK,
+		)
 
 
 class ResendCodeView(APIView):
