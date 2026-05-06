@@ -171,7 +171,8 @@ class ExpertTaskAssignmentService:
             return False
 
         specialization = application.application_data.get("step_2", {}).get("domain_specialization")
-        return domain in self._normalize_domain_specialization(specialization)
+        normalized = self._normalize_domain_specialization(specialization)
+        return str(domain).lower() in normalized
 
     def _normalize_domain_specialization(self, specialization):
         if specialization is None:
@@ -180,17 +181,17 @@ class ExpertTaskAssignmentService:
             try:
                 parsed = json.loads(specialization)
                 if isinstance(parsed, list):
-                    return [str(item) for item in parsed]
+                    return [str(item).lower() for item in parsed]
                 if isinstance(parsed, dict):
-                    return [str(value) for value in parsed.values()]
+                    return [str(value).lower() for value in parsed.values()]
             except json.JSONDecodeError:
-                return [specialization]
-            return [str(parsed)]
+                return [specialization.lower()]
+            return [str(parsed).lower()]
         if isinstance(specialization, dict):
-            return [str(value) for value in specialization.values()]
+            return [str(value).lower() for value in specialization.values()]
         if isinstance(specialization, (list, tuple, set)):
-            return [str(item) for item in specialization]
-        return [str(specialization)]
+            return [str(item).lower() for item in specialization]
+        return [str(specialization).lower()]
 
     def select_best_expert(self, experts):
         if not experts:
