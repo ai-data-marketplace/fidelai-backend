@@ -56,10 +56,6 @@ def dispatch_processing_on_file_upload(
                 exc,
                 exc_info=True,
             )
-            from apps.documents.models import RawDocument, ReviewStatusChoices
-            RawDocument.objects.filter(pk=raw_document_id).update(
-                review_status=ReviewStatusChoices.REJECTED
-            )
 
     from django.db import transaction
     transaction.on_commit(_dispatch_pipeline)
