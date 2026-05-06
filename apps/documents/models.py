@@ -11,7 +11,7 @@ class DomainChoices(models.TextChoices):
     FINANCE = "finance", "Finance"
     NEWS = "news", "News"
     RELIGION = "religion", "Religion"
-    OTHER = "other", "Other"
+    GENERAL = "general", "General"
 
 
 class DataTypeChoices(models.TextChoices):
@@ -47,7 +47,7 @@ class RawDocument(TimeStampedModel):
     domain = models.CharField(
         max_length=20,
         choices=DomainChoices.choices,
-        default=DomainChoices.OTHER
+        default=DomainChoices.GENERAL
     )
     subdomain = models.CharField(max_length=100, blank=True)
 

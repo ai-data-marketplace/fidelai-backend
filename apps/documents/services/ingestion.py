@@ -135,7 +135,7 @@ class DocumentIngestionHandlerService:
             user=user,
             title=metadata["title"],
             description=metadata.get("description", ""),
-            domain=metadata.get("domain", DomainChoices.OTHER),
+            domain=metadata.get("domain", DomainChoices.GENERAL),
             subdomain=metadata.get("subdomain", ""),
             language=metadata.get("language", "amharic"),
             data_type=DataTypeChoices.TEXT,

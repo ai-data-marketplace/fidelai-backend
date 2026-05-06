@@ -32,7 +32,7 @@ class DocumentSubmitSerializer(serializers.Serializer):
     )
     domain = serializers.ChoiceField(
         choices=DomainChoices.choices,
-        default=DomainChoices.OTHER,
+        default=DomainChoices.GENERAL,
         help_text="Content domain (health, law, education, etc.).",
     )
     subdomain = serializers.CharField(

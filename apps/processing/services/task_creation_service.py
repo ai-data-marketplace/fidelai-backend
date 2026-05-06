@@ -183,7 +183,7 @@ class TaskCreationService:
             "finance": "financial transcription segments",
             "news": "news transcription segments",
             "religion": "religious transcription segments",
-            "other": "transcription segments",
+            "general": "General transcription segments",
         }
         subject = domain_phrases.get(domain, "transcription segments")
         return f"Annotate {subject}."

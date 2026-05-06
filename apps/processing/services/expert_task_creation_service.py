@@ -30,7 +30,7 @@ class ExpertTaskCreationService:
     def group_chunks_by_domain(self, chunks):
         grouped_chunks = defaultdict(list)
         for chunk in chunks:
-            domain = chunk.extracted_document.raw_document.domain or DomainChoices.OTHER
+            domain = chunk.extracted_document.raw_document.domain or DomainChoices.GENERAL
             grouped_chunks[domain].append(chunk)
         return dict(grouped_chunks)
 
