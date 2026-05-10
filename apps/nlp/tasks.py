@@ -7,6 +7,7 @@ from celery import shared_task
 from apps.nlp.services.candidate_extraction_service import CandidateExtractionService
 from apps.nlp.services.nlp_task_creation_service import NLPTaskCreationService
 from apps.nlp.services.nlp_task_assignment_service import NLPTaskAssignmentService
+from apps.nlp.services.nlp_consensus_service import NLPConsensusService
 
 
 logger = logging.getLogger(__name__)
@@ -40,5 +41,15 @@ def DispatchNlpTaskAssignment() -> dict:
     logger.info("Starting NLP task assignment")
     summary = service.assign_tasks()
     logger.info("NLP task assignment completed: %s", summary)
+
+    return summary
+
+
+@shared_task
+def DispatchNlpConsensus(batch_size: int = 100, force: bool = False) -> dict:
+    service = NLPConsensusService()
+    logger.info("Starting NLP consensus run with batch_size=%s force=%s", batch_size, force)
+    summary = service.run(batch_size=batch_size, force=force)
+    logger.info("NLP consensus completed: %s", summary)
 
     return summary
