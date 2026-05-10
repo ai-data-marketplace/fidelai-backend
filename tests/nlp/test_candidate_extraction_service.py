@@ -81,9 +81,9 @@ class CandidateExtractionServiceTestCase(TestCase):
         self.assertIn("commerce", prompt)
 
     def test_validate_candidate_accepts_valid(self):
-        """Test validation accepts good candidates."""
+        """Test validation accepts good Amharic candidates."""
         candidate = Candidate(
-            text="This product is amazing!",
+            text="ምርቱ በጣም ጥሩ ነው!",
             candidate_sentiment="positive",
             confidence=0.95
         )
@@ -228,13 +228,13 @@ class CandidateExtractionServiceTestCase(TestCase):
         self.assertFalse(nlp_chunk.requires_human_review)
 
     def test_process_chunk_creates_nlp_chunks_from_candidates(self):
-        """Test process_chunk creates NLPChunk records from valid candidates."""
+        """Test process_chunk creates NLPChunk records from valid Amharic candidates."""
         with patch.object(self.service, "call_gemini") as mock_gemini:
             # Mock Gemini response
             mock_response = MagicMock()
             mock_response.text = json.dumps([
-                {"text": "Great service!", "candidate_sentiment": "positive", "confidence": 0.95},
-                {"text": "Slow delivery", "candidate_sentiment": "negative", "confidence": 0.88},
+                {"text": "አገልግሎቱ በጣም ጥሩ ነው!", "candidate_sentiment": "positive", "confidence": 0.95},
+                {"text": "ማድረሱ ቀርፋፋ ነበር", "candidate_sentiment": "negative", "confidence": 0.88},
             ])
             mock_gemini.return_value = mock_response
             
@@ -254,10 +254,10 @@ class CandidateExtractionServiceTestCase(TestCase):
         existing = NLPChunk.objects.create(
             source_chunk=self.chunk,
             task_type=NLPTaskTypeChoices.SENTIMENT,
-            text="Great service!",
+            text="አገልግሎቱ በጣም ጥሩ ነው!",
             order_index=0,
             char_start=0,
-            char_end=14,
+            char_end=18,
             generated_by_ai=True,
             ai_model_name="test",
             status=NLPChunkStatusChoices.READY_FOR_ANNOTATION,
@@ -267,8 +267,8 @@ class CandidateExtractionServiceTestCase(TestCase):
             # Mock Gemini returning a duplicate
             mock_response = MagicMock()
             mock_response.text = json.dumps([
-                {"text": "Great service!", "candidate_sentiment": "positive", "confidence": 0.95},  # duplicate
-                {"text": "Slow delivery", "candidate_sentiment": "negative", "confidence": 0.88},  # new
+                {"text": "አገልግሎቱ በጣም ጥሩ ነው!", "candidate_sentiment": "positive", "confidence": 0.95},  # duplicate
+                {"text": "ማድረሱ ቀርፋፋ ነበር", "candidate_sentiment": "negative", "confidence": 0.88},  # new
             ])
             mock_gemini.return_value = mock_response
             
@@ -293,39 +293,45 @@ class CandidateExtractionServiceTestCase(TestCase):
         
         self.assertTrue(self.service.validate_candidate(candidate, min_confidence=0.6))
 
-    def test_validate_candidate_accepts_arabic_text(self):
-        """Test validation accepts valid Arabic text candidates."""
-        # "المنتج ممتاز جداً" = "The product is excellent"
+    def test_validate_candidate_rejects_arabic_text(self):
+        """Test validation rejects non-Amharic Arabic text."""
         candidate = Candidate(
             text="المنتج ممتاز جداً",
             candidate_sentiment="positive",
             confidence=0.92
         )
-        
-        self.assertTrue(self.service.validate_candidate(candidate, min_confidence=0.6))
 
-    def test_validate_candidate_accepts_chinese_text(self):
-        """Test validation accepts valid Chinese text with enough content."""
-        # Mix English and Chinese to meet word count requirement
-        # (Current service uses ASCII \w+ regex, so Chinese-only text won't have "words")
+        self.assertFalse(self.service.validate_candidate(candidate, min_confidence=0.6))
+
+    def test_validate_candidate_rejects_chinese_text(self):
+        """Test validation rejects non-Amharic Chinese text."""
         candidate = Candidate(
-            text="great 产品质量很好",
+            text="产品质量很好",
             candidate_sentiment="positive",
             confidence=0.90
         )
-        
-        self.assertTrue(self.service.validate_candidate(candidate, min_confidence=0.6))
 
-    def test_validate_candidate_accepts_mixed_script_text(self):
-        """Test validation accepts valid mixed-script text."""
-        # Mix of English and Amharic
+        self.assertFalse(self.service.validate_candidate(candidate, min_confidence=0.6))
+
+    def test_validate_candidate_rejects_mixed_script_text(self):
+        """Test validation rejects mixed-script text when it is not Amharic-only."""
         candidate = Candidate(
             text="Amazing product! ምርጫ በጥንቃቄ",
             candidate_sentiment="positive",
             confidence=0.85
         )
-        
-        self.assertTrue(self.service.validate_candidate(candidate, min_confidence=0.6))
+
+        self.assertFalse(self.service.validate_candidate(candidate, min_confidence=0.6))
+
+    def test_validate_candidate_rejects_latin_text(self):
+        """Test validation rejects Latin text."""
+        candidate = Candidate(
+            text="Amazing product!",
+            candidate_sentiment="positive",
+            confidence=0.95
+        )
+
+        self.assertFalse(self.service.validate_candidate(candidate, min_confidence=0.6))
 
     def test_normalize_text_preserves_amharic(self):
         """Test text normalization preserves Amharic characters."""
@@ -455,9 +461,9 @@ class CandidateExtractionServiceTestCase(TestCase):
         with patch.object(self.service, "call_gemini") as mock_gemini:
             mock_response = MagicMock()
             mock_response.text = json.dumps([
-                {"text": "Good", "candidate_sentiment": "positive", "confidence": 0.95},  # too short
-                {"text": "Terrible!!!!", "candidate_sentiment": "negative", "confidence": 0.88},  # repeated punctuation
-                {"text": "Amazing product experience", "candidate_sentiment": "positive", "confidence": 0.92},  # valid
+                {"text": "ጥሩ", "candidate_sentiment": "positive", "confidence": 0.95},  # too short
+                {"text": "አስፈሪ!!!!", "candidate_sentiment": "negative", "confidence": 0.88},  # repeated punctuation
+                {"text": "አገልግሎቱ በጣም ጥሩ ነው", "candidate_sentiment": "positive", "confidence": 0.92},  # valid
             ])
             mock_gemini.return_value = mock_response
             

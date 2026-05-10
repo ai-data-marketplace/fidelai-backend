@@ -192,13 +192,15 @@ class CandidateExtractionService:
         # Keep prompt clear and structured for stable JSON response
         instruction = (
             "You will receive a paragraph of text from a QC-approved document chunk. "
-            "Identify sentences or spans that carry subjective sentiment (opinions, praise, criticism, "
-            "emotional statements, satisfaction or dissatisfaction). Do NOT include purely factual sentences, "
-            "headings, metadata, or irrelevant fragments. For each candidate, return a JSON object with fields: \n"
+            "Identify ONLY sentiment-bearing spans written in Amharic (Ethiopic script). "
+            "Do NOT extract English, Arabic, Chinese, or any other non-Amharic text. "
+            "Do NOT include purely factual sentences, headings, metadata, or irrelevant fragments. "
+            "For each candidate, return a JSON object with fields: \n"
             "- text: the exact candidate text (string)\n"
             "- candidate_sentiment: one of 'positive', 'negative', 'neutral'\n"
             "- confidence: float between 0 and 1 indicating model confidence\n"
-            "Return ONLY a JSON array of such objects. Do NOT include any explanation, markdown, or additional text."
+            "Return ONLY a JSON array of such objects. The `text` field must contain Amharic text exactly as it appears in the chunk. "
+            "Do NOT include any explanation, markdown, or additional text."
         )
 
         # Provide domain and a small instruction to prefer compact candidate spans
@@ -316,7 +318,7 @@ class CandidateExtractionService:
     def validate_candidate(self, candidate: Candidate, min_confidence: float = DEFAULT_CONFIDENCE_THRESHOLD) -> bool:
         """Run a series of heuristic checks to determine whether the candidate is acceptable.
 
-        Reject if empty, too short, low confidence, or obvious garbage.
+        Reject if empty, too short, low confidence, non-Amharic, or obvious garbage.
         """
         text = candidate.text
         if not text:
@@ -329,6 +331,10 @@ class CandidateExtractionService:
             pass
 
         if len(text.strip()) < 5:
+            return False
+
+        # Require Amharic/Ethiopic script only so we only extract the current target language.
+        if not self._is_amharic_only(text):
             return False
 
         # confidence threshold
@@ -356,6 +362,24 @@ class CandidateExtractionService:
             return False
 
         return True
+
+    def _is_amharic_only(self, text: str) -> bool:
+        """Return True when the text is written in Ethiopic/Amharic script only.
+
+        Punctuation, whitespace, and digits are allowed, but any alphabetic character
+        outside the Ethiopic ranges causes rejection.
+        """
+        if not text:
+            return False
+
+        has_amharic = False
+        for char in text:
+            if char.isalpha():
+                if not re.match(r"[\u1200-\u137F\u1380-\u139F]", char):
+                    return False
+                has_amharic = True
+
+        return has_amharic
 
     def normalize_text(self, text: str) -> str:
         """Normalize text for deduplication comparisons.
