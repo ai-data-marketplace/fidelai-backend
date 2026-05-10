@@ -9,20 +9,20 @@ class DatasetChunk(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="dataset_chunks",
     )
-    chunk = models.ForeignKey(
-        "processing.Chunk",
+    nlp_chunk = models.ForeignKey(
+        "nlp.NLPChunk",
         on_delete=models.CASCADE,
         related_name="dataset_links",
     )
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["dataset", "chunk"], name="uniq_datasetchunk_dataset_chunk"),
+            models.UniqueConstraint(fields=["dataset", "nlp_chunk"], name="uniq_datasetchunk_dataset_nlpchunk"),
         ]
         indexes = [
             models.Index(fields=["dataset"]),
-            models.Index(fields=["chunk"]),
+            models.Index(fields=["nlp_chunk"]),
         ]
 
     def __str__(self):
-        return f"DatasetChunk<{self.dataset_id}:{self.chunk_id}>"
+        return f"DatasetChunk<{self.dataset_id}:{self.nlp_chunk_id}>"

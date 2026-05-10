@@ -12,6 +12,8 @@ class DatasetMetrics(TimeStampedModel):
     total_documents = models.PositiveIntegerField(default=0)
     chunk_count = models.PositiveIntegerField(default=0)
     token_count = models.PositiveBigIntegerField(default=0)
+    label_distribution = models.JSONField(default=dict)
+    domain_distribution = models.JSONField(default=dict)
     avg_qc_score = models.FloatField()
     annotation_coverage = models.FloatField()
     expert_validation_ratio = models.FloatField()

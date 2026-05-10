@@ -2,6 +2,7 @@ from django.db import models
 
 from apps.common.models.base import TimeStampedModel
 from apps.documents.models import DomainChoices
+from apps.nlp.models.choices import NLPTaskTypeChoices
 
 
 class DatasetStatusChoices(models.TextChoices):
@@ -26,6 +27,15 @@ class Dataset(TimeStampedModel):
     subdomain = models.CharField(max_length=100, blank=True)
     language = models.CharField(max_length=50, default="amharic")
 
+    nlp_task_type = models.CharField(
+        max_length=50,
+        choices=NLPTaskTypeChoices.choices,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Primary NLP task type for this dataset",
+    )
+
     license_type = models.CharField(max_length=20, choices=DatasetLicenseChoices.choices)
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
@@ -36,6 +46,8 @@ class Dataset(TimeStampedModel):
         default=DatasetStatusChoices.DRAFT,
     )
 
+    # Reproducible aggregation rules used to build this dataset
+    build_config = models.JSONField(default=dict)
     collection_year = models.PositiveIntegerField()
     created_by = models.ForeignKey(
         "users.CustomUser",
@@ -79,7 +91,8 @@ class Dataset(TimeStampedModel):
             models.Index(fields=["approved_by"]),
             models.Index(fields=["approved_at"]),
             models.Index(fields=["published_at"]),
+            models.Index(fields=["nlp_task_type"]),
         ]
 
     def __str__(self):
-        return f"Dataset<{self.title}:{self.version}>"
+        return f"Dataset<{self.title}:{self.version}:{self.nlp_task_type}>"
