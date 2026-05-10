@@ -61,7 +61,8 @@ class NLPConsensusService:
 
         chunks_qs = self.fetch_chunks_ready_for_consensus(batch_size=batch_size, force=force)
 
-        for chunk in chunks_qs.iterator():
+        # When using prefetch_related(), iterator() requires an explicit chunk_size.
+        for chunk in chunks_qs.iterator(chunk_size=200):
             annotations = list(self.get_annotations(chunk))
 
             if len(annotations) < MIN_ANNOTATIONS_REQUIRED:

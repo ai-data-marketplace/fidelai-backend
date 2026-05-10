@@ -1,5 +1,6 @@
 """Tests for the NLP candidate extraction service."""
 
+import os
 import json
 from unittest.mock import MagicMock, patch
 
@@ -21,8 +22,9 @@ class CandidateExtractionServiceTestCase(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+        self.model_name = os.getenv("GEMINI_MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
         self.service = CandidateExtractionService(
-            model_name="gemini-1.5-flash",
+            model_name=self.model_name,
             api_key="test-key-123"
         )
         
@@ -63,7 +65,7 @@ class CandidateExtractionServiceTestCase(TestCase):
 
     def test_service_initialization(self):
         """Test service initializes with correct settings."""
-        self.assertEqual(self.service.model_name, "gemini-1.5-flash")
+        self.assertEqual(self.service.model_name, self.model_name)
         self.assertEqual(self.service.api_key, "test-key-123")
 
     def test_build_prompt_structure(self):
@@ -479,15 +481,18 @@ class CandidateExtractionIntegrationTestCase(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        import os
         self.api_key = os.getenv("GEMINI_API_KEY")
+        self.model_name = os.getenv("GEMINI_MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
         
         # Skip tests if API key is not available
         if not self.api_key or self.api_key == "your-gemini-api-key-here":
             self.skipTest("GEMINI_API_KEY not configured in .env")
+
+        if not self.model_name:
+            self.skipTest("GEMINI_MODEL_NAME not configured in .env")
         
         self.service = CandidateExtractionService(
-            model_name="gemini-1.5-flash",
+            model_name=self.model_name,
             api_key=self.api_key
         )
         
@@ -511,7 +516,7 @@ class CandidateExtractionIntegrationTestCase(TestCase):
         # Create extracted document
         self.extracted_doc = ExtractedDocument.objects.create(
             raw_document=self.raw_doc,
-            full_text="Integration test document content.",
+            full_text="ይህ የሙከራ ሰነድ ነው። ምርቱ በጣም ጥሩ ነው! ነገር ግን አገልግሎቱ ዘገየ።",
             processed_at="2024-01-01T00:00:00Z",
         )
         
@@ -519,10 +524,10 @@ class CandidateExtractionIntegrationTestCase(TestCase):
         self.chunk = Chunk.objects.create(
             extracted_document=self.extracted_doc,
             status=ChunkStatusChoices.APPROVED,
-            text="The product quality exceeded my expectations! But the customer service was disappointing. Overall, I'm satisfied with my purchase.",
+            text="የምርቱ ጥራት ከተጠበቀው በላይ ነበር! ነገር ግን የደንበኛ አገልግሎቱ አልተደሰትኩበትም። በአጠቃላይ ግዢዬን ወድጄዋለሁ።",
             order_index=1,
             char_start=0,
-            char_end=140,
+            char_end=120,
             token_count=30,
         )
 
