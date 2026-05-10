@@ -1,0 +1,185 @@
+"""NLP annotation workflow service.
+
+Keeps annotation submission and task/assignment read helpers out of the views.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Dict, Iterable, Optional
+
+from django.db import transaction
+from django.db.models import Count, Prefetch
+from django.utils import timezone
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
+
+from apps.nlp.models import (
+    NLPAnnotation,
+    NLPAnnotationTask,
+    NLPChunk,
+    NLPTaskAssignment,
+    NLPTaskChunk,
+)
+from apps.nlp.models.choices import NLPChunkStatusChoices, NLPTaskAssignmentStatusChoices
+
+
+logger = logging.getLogger(__name__)
+
+
+class NLPAnnotationConflict(APIException):
+    status_code = 409
+    default_detail = "You have already annotated this chunk."
+    default_code = "conflict"
+
+
+class NLPAnnotationService:
+    ACTIVE_ASSIGNMENT_STATUSES = (
+        NLPTaskAssignmentStatusChoices.ASSIGNED,
+        NLPTaskAssignmentStatusChoices.ACCEPTED,
+        NLPTaskAssignmentStatusChoices.IN_PROGRESS,
+    )
+
+    TASK_ACCESS_STATUSES = (
+        NLPTaskAssignmentStatusChoices.ASSIGNED,
+        NLPTaskAssignmentStatusChoices.ACCEPTED,
+        NLPTaskAssignmentStatusChoices.IN_PROGRESS,
+    )
+
+    def get_assigned_tasks_queryset(self, user):
+        return (
+            NLPTaskAssignment.objects.select_related("task")
+            .filter(annotator=user, status__in=self.TASK_ACCESS_STATUSES)
+            .order_by("-assigned_at")
+        )
+
+    def get_assignment_for_user(self, task_id, user, statuses: Optional[Iterable[str]] = None):
+        queryset = NLPTaskAssignment.objects.select_related("task").filter(task_id=task_id, annotator=user)
+        if statuses is not None:
+            queryset = queryset.filter(status__in=list(statuses))
+
+        try:
+            return queryset.get()
+        except NLPTaskAssignment.DoesNotExist as exc:
+            raise NotFound("Task assignment not found.") from exc
+
+    def get_task_detail_assignment(self, task_id, user):
+        annotation_qs = NLPAnnotation.objects.filter(annotator=user).order_by("-created_at")
+        task_chunks_qs = (
+            NLPTaskChunk.objects.select_related("nlp_chunk")
+            .prefetch_related(
+                Prefetch("nlp_chunk__annotations", queryset=annotation_qs, to_attr="user_annotations")
+            )
+            .order_by("order_index")
+        )
+
+        queryset = (
+            NLPTaskAssignment.objects.select_related("task")
+            .prefetch_related(Prefetch("task__task_chunks", queryset=task_chunks_qs, to_attr="prefetched_task_chunks"))
+            .filter(annotator=user, task_id=task_id, status__in=self.TASK_ACCESS_STATUSES)
+        )
+
+        try:
+            return queryset.get()
+        except NLPTaskAssignment.DoesNotExist as exc:
+            raise NotFound("Task assignment not found.") from exc
+
+    def get_progress(self, assignment: NLPTaskAssignment) -> Dict[str, int]:
+        total_chunks = assignment.task.total_chunks or assignment.task.task_chunks.count()
+        annotated_chunks = (
+            NLPAnnotation.objects.filter(
+                annotator=assignment.annotator,
+                nlp_chunk__task_assignments__task=assignment.task,
+            )
+            .values("nlp_chunk_id")
+            .distinct()
+            .count()
+        )
+        remaining_chunks = max(total_chunks - annotated_chunks, 0)
+        completion_percentage = int((annotated_chunks / total_chunks) * 100) if total_chunks else 0
+
+        return {
+            "task_id": assignment.task_id,
+            "total_chunks": total_chunks,
+            "annotated_chunks": annotated_chunks,
+            "remaining_chunks": remaining_chunks,
+            "completion_percentage": completion_percentage,
+        }
+
+    @transaction.atomic
+    def accept_assignment(self, assignment: NLPTaskAssignment) -> NLPTaskAssignment:
+        assignment = NLPTaskAssignment.objects.select_for_update().select_related("task").get(pk=assignment.pk)
+
+        if assignment.status != NLPTaskAssignmentStatusChoices.ASSIGNED:
+            raise ValidationError({"detail": "Task can only be accepted when it is assigned."})
+
+        assignment.status = NLPTaskAssignmentStatusChoices.ACCEPTED
+        if assignment.started_at is None:
+            assignment.started_at = timezone.now()
+        assignment.save(update_fields=["status", "started_at", "updated_at"])
+        return assignment
+
+    @transaction.atomic
+    def decline_assignment(self, assignment: NLPTaskAssignment) -> NLPTaskAssignment:
+        assignment = NLPTaskAssignment.objects.select_for_update().select_related("task").get(pk=assignment.pk)
+
+        if assignment.status not in (
+            NLPTaskAssignmentStatusChoices.ASSIGNED,
+            NLPTaskAssignmentStatusChoices.ACCEPTED,
+        ):
+            raise ValidationError({"detail": "Task can only be declined when it is assigned or accepted."})
+
+        assignment.status = NLPTaskAssignmentStatusChoices.DECLINED
+        assignment.save(update_fields=["status", "updated_at"])
+        return assignment
+
+    @transaction.atomic
+    def submit_annotation(self, user, chunk: NLPChunk, validated_data: Dict[str, object]) -> NLPAnnotation:
+        task_chunk = (
+            NLPTaskChunk.objects.select_related("task")
+            .filter(nlp_chunk=chunk)
+            .order_by("order_index")
+            .first()
+        )
+        if task_chunk is None:
+            raise NotFound("Chunk not found in any NLP task.")
+
+        assignment = (
+            NLPTaskAssignment.objects.select_for_update()
+            .select_related("task")
+            .filter(
+                task=task_chunk.task,
+                annotator=user,
+                status__in=(
+                    NLPTaskAssignmentStatusChoices.ACCEPTED,
+                    NLPTaskAssignmentStatusChoices.IN_PROGRESS,
+                ),
+            )
+            .first()
+        )
+
+        if assignment is None:
+            raise PermissionDenied("You do not have an accepted assignment for this chunk.")
+
+        if NLPAnnotation.objects.filter(nlp_chunk=chunk, annotator=user).exists():
+            raise NLPAnnotationConflict()
+
+        annotation = NLPAnnotation.objects.create(
+            nlp_chunk=chunk,
+            annotator=user,
+            task_assignment=assignment,
+            task_type=task_chunk.task.task_type,
+            labels=validated_data["labels"],
+            notes=validated_data.get("notes", ""),
+            confidence_score=validated_data["confidence_score"],
+            time_spent_seconds=validated_data.get("time_spent_seconds"),
+        )
+
+        if chunk.status != NLPChunkStatusChoices.IN_ANNOTATION:
+            chunk.status = NLPChunkStatusChoices.IN_ANNOTATION
+            chunk.save(update_fields=["status", "updated_at"])
+
+        logger.info("Created NLP annotation id=%s for chunk=%s by user=%s", annotation.pk, chunk.pk, user.pk)
+        return annotation
+
+
+__all__ = ["NLPAnnotationService", "NLPAnnotationConflict"]

@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/scoring/', include('apps.scoring.urls')),
     path('api/documents/', include('apps.documents.urls')),
     path('api/processing/', include('apps.processing.urls')),
+    path('api/nlp/', include('apps.nlp.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     # path('api/v1/datasets/', include('apps.datasets.urls')),
     # path('api/v1/marketplace/', include('apps.marketplace.urls')),
