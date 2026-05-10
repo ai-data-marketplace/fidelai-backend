@@ -178,6 +178,14 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(minute='*/5'),
         'args': (CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE,),
     },
+    'dispatch-nlp-task-creation': {
+        'task': 'apps.nlp.tasks.DispatchNlpTaskCreation',
+        'schedule': crontab(minute='*/2'),
+    },
+    'dispatch-nlp-task-assignment': {
+        'task': 'apps.nlp.tasks.DispatchNlpTaskAssignment',
+        'schedule': crontab(minute='*/5'),
+    },
 }
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
