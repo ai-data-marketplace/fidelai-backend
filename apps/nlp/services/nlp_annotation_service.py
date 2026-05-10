@@ -33,6 +33,8 @@ class NLPAnnotationConflict(APIException):
 
 
 class NLPAnnotationService:
+    MIN_CONSENSUS_ANNOTATIONS = 3
+
     ACTIVE_ASSIGNMENT_STATUSES = (
         NLPTaskAssignmentStatusChoices.ASSIGNED,
         NLPTaskAssignmentStatusChoices.ACCEPTED,
@@ -178,8 +180,49 @@ class NLPAnnotationService:
             chunk.status = NLPChunkStatusChoices.IN_ANNOTATION
             chunk.save(update_fields=["status", "updated_at"])
 
+        self._maybe_mark_chunk_consensus_ready(chunk=chunk, task=task_chunk.task)
+
         logger.info("Created NLP annotation id=%s for chunk=%s by user=%s", annotation.pk, chunk.pk, user.pk)
         return annotation
+
+    def _maybe_mark_chunk_consensus_ready(self, chunk: NLPChunk, task: NLPAnnotationTask) -> None:
+        """Move a chunk to consensus-ready when all participating assignees have annotated it.
+
+        Participating assignees exclude declined assignments. We require all such
+        assignees to have submitted one annotation for this chunk and enforce a
+        minimum annotation threshold for consensus computation.
+        """
+        participating_annotator_ids = set(
+            NLPTaskAssignment.objects.filter(
+                task=task,
+                status__in=(
+                    NLPTaskAssignmentStatusChoices.ASSIGNED,
+                    NLPTaskAssignmentStatusChoices.ACCEPTED,
+                    NLPTaskAssignmentStatusChoices.IN_PROGRESS,
+                    NLPTaskAssignmentStatusChoices.SUBMITTED,
+                ),
+            ).values_list("annotator_id", flat=True)
+        )
+
+        if not participating_annotator_ids:
+            return
+
+        annotated_annotator_ids = set(
+            NLPAnnotation.objects.filter(
+                nlp_chunk=chunk,
+                annotator_id__in=participating_annotator_ids,
+            )
+            .values_list("annotator_id", flat=True)
+            .distinct()
+        )
+
+        all_participants_annotated = participating_annotator_ids.issubset(annotated_annotator_ids)
+        enough_annotations = len(annotated_annotator_ids) >= self.MIN_CONSENSUS_ANNOTATIONS
+
+        if all_participants_annotated and enough_annotations:
+            if chunk.status != NLPChunkStatusChoices.CONSENSUS_READY:
+                chunk.status = NLPChunkStatusChoices.CONSENSUS_READY
+                chunk.save(update_fields=["status", "updated_at"])
 
 
 __all__ = ["NLPAnnotationService", "NLPAnnotationConflict"]

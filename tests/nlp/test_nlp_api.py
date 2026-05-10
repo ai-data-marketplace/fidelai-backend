@@ -1,5 +1,4 @@
 from django.test import TestCase
-from django.urls import reverse
 from rest_framework.test import APIClient
 from django.utils import timezone
 
@@ -103,3 +102,39 @@ class NLPApiEndpointTestCase(TestCase):
         }
         resp = self.client.post(f"/api/nlp/chunks/{self.nlp_chunk.id}/annotate/", data=good_payload, format="json")
         self.assertEqual(resp.status_code, 201)
+
+    def test_chunk_becomes_consensus_ready_when_all_assignees_submit(self):
+        annotator_two = CustomUser.objects.create(
+            email="ann2@example.com",
+            username="ann2",
+            full_name="Ann 2",
+            role="annotator",
+            is_verified=True,
+        )
+        annotator_three = CustomUser.objects.create(
+            email="ann3@example.com",
+            username="ann3",
+            full_name="Ann 3",
+            role="annotator",
+            is_verified=True,
+        )
+
+        NLPTaskAssignment.objects.create(task=self.task, annotator=annotator_two, status="accepted")
+        NLPTaskAssignment.objects.create(task=self.task, annotator=annotator_three, status="accepted")
+
+        self.assignment.status = "accepted"
+        self.assignment.save(update_fields=["status"])
+
+        payload = {
+            "labels": {"sentiment": "positive"},
+            "confidence_score": 0.91,
+            "time_spent_seconds": 14,
+        }
+
+        for user in (self.annotator, annotator_two, annotator_three):
+            self.client.force_authenticate(user=user)
+            resp = self.client.post(f"/api/nlp/chunks/{self.nlp_chunk.id}/annotate/", data=payload, format="json")
+            self.assertEqual(resp.status_code, 201)
+
+        self.nlp_chunk.refresh_from_db()
+        self.assertEqual(self.nlp_chunk.status, NLPChunkStatusChoices.CONSENSUS_READY)
