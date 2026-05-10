@@ -137,6 +137,7 @@ CELERY_MAX_CHUNKS_PER_TASK = env.int('CELERY_MAX_CHUNKS_PER_TASK', default=30)
 CELERY_CONSENSUS_BATCH_SIZE = env.int('CELERY_CONSENSUS_BATCH_SIZE', default=100)
 CELERY_EXPERT_TASK_BATCH_SIZE = env.int('CELERY_EXPERT_TASK_BATCH_SIZE', default=100)
 CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE = env.int('CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE', default=50)
+CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE = env.int('CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE', default=50)
 CELERY_BEAT_SCHEDULE = {
     'dispatch-pending-document-processing': {
         'task': 'apps.processing.tasks.DispatchPendingDocumentProcessing',
@@ -171,6 +172,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.processing.tasks.DispatchPendingExpertTaskAssignments',
         'schedule': crontab(minute='*/5'),
         'args': (CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE,),
+    },
+    'dispatch-pending-nlp-candidate-extraction': {
+        'task': 'apps.nlp.tasks.DispatchPendingNlpCandidateExtraction',
+        'schedule': crontab(minute='*/5'),
+        'args': (CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE,),
     },
 }
 
