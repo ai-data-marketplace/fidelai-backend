@@ -47,6 +47,8 @@ class AnnotationExecutionService:
 
         if status:
             queryset = queryset.filter(status=status)
+        else:
+            queryset = queryset.filter(status=TaskAssignmentStatusChoices.ASSIGNED)
 
         return queryset
 

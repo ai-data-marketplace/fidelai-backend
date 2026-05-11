@@ -168,6 +168,10 @@ class AnnotationExecutionAPITests(APITestCase):
 
         response = self.client.get("/api/processing/my-assignments/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 0)
+
+        response = self.client.get("/api/processing/my-assignments/?status=submitted")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
 
     def test_chunk_status_moves_to_annotated_after_consensus(self):
