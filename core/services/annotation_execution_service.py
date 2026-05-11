@@ -120,17 +120,17 @@ class AnnotationExecutionService:
             if not TaskChunk.objects.filter(task=assignment.task, chunk=chunk).exists():
                 raise ValidationError({"detail": "Chunk does not belong to this assignment."})
 
-            if Annotation.objects.filter(chunk=chunk, annotator=annotator).exists():
-                raise ValidationError({"detail": "You have already annotated this chunk."})
-
-            annotation = Annotation.objects.create(
+            annotation, created = Annotation.objects.update_or_create(
                 chunk=chunk,
                 annotator=annotator,
-                task_assignment=assignment,
-                **validated_data,
+                defaults={
+                    "task_assignment": assignment,
+                    **validated_data,
+                },
             )
 
-            score_annotation_submitted(annotation)
+            if created:
+                score_annotation_submitted(annotation)
 
             self.update_chunk_status_after_annotation(chunk=chunk, task_id=assignment.task_id)
 

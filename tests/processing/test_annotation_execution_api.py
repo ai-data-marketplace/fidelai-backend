@@ -258,10 +258,17 @@ class AnnotationExecutionAPITests(APITestCase):
         }
         response = self.client.post(f"/api/processing/chunks/{self.chunks[0].id}/annotate/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        first_annotation_id = response.data["annotation_id"]
 
+        # Re-submit with updated notes (simulates going back and modifying)
+        payload["notes"] = "updated first chunk"
         response = self.client.post(f"/api/processing/chunks/{self.chunks[0].id}/annotate/", payload, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(str(response.data["detail"][0]), "You have already annotated this chunk.")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["annotation_id"], first_annotation_id)  # Same annotation, updated
+        
+        # Verify annotation was updated
+        annotation = Annotation.objects.get(pk=first_annotation_id)
+        self.assertEqual(annotation.notes, "updated first chunk")
 
         self.client.force_authenticate(user=self.other_annotator)
         response = self.client.post(f"/api/processing/assignments/{self.assignment.id}/accept/")

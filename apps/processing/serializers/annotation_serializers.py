@@ -78,9 +78,6 @@ class AnnotationCreateSerializer(serializers.Serializer):
         if not TaskChunk.objects.filter(task=assignment.task, chunk=chunk).exists():
             raise ValidationError({"detail": "Chunk does not belong to this assignment."})
 
-        if Annotation.objects.filter(chunk=chunk, annotator=request.user).exists():
-            raise ValidationError({"detail": "You have already annotated this chunk."})
-
         return attrs
 
 
