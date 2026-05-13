@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -23,13 +23,26 @@ class ExpertReviewService:
         TaskAssignmentStatusChoices.IN_PROGRESS,
     )
 
-    def get_my_assignments_queryset(self, user):
-        return (
+    def get_my_assignments_queryset(self, user, status: str | None = None):
+        queryset = (
             ExpertTaskAssignment.objects.select_related("expert_task")
             .filter(expert=user)
             .annotate(total_chunks=Count("expert_task__task_chunks"))
             .order_by("-assigned_at")
         )
+
+        if status:
+            if status == TaskAssignmentStatusChoices.IN_PROGRESS:
+                queryset = queryset.filter(
+                    Q(status=TaskAssignmentStatusChoices.ASSIGNED) |
+                    Q(status=TaskAssignmentStatusChoices.IN_PROGRESS)
+                )
+            else:
+                queryset = queryset.filter(status=status)
+        else:
+            queryset = queryset.filter(status=TaskAssignmentStatusChoices.ASSIGNED)
+
+        return queryset
 
     def get_assignment_for_user(self, assignment_id, user):
         assignment = (

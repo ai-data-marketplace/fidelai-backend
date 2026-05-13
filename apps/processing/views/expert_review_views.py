@@ -25,12 +25,15 @@ class ExpertTaskPagination(PageNumberPagination):
 class ExpertTaskListAPIView(generics.ListAPIView):
     permission_classes = [IsExpert]
     serializer_class = ExpertTaskListSerializer
-
- 
     pagination_class = ExpertTaskPagination
 
     def get_queryset(self):
-        return service.get_my_assignments_queryset(self.request.user)
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            from apps.processing.models import TaskAssignmentStatusChoices
+            if status_filter not in TaskAssignmentStatusChoices.values:
+                raise ValidationError({"detail": "Invalid assignment status filter."})
+        return service.get_my_assignments_queryset(self.request.user, status=status_filter)
 
 
 class ExpertTaskAcceptAPIView(APIView):
