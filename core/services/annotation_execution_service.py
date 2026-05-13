@@ -46,7 +46,13 @@ class AnnotationExecutionService:
         )
 
         if status:
-            queryset = queryset.filter(status=status)
+            if status == TaskAssignmentStatusChoices.IN_PROGRESS:
+                queryset = queryset.filter(
+                    Q(status=TaskAssignmentStatusChoices.ACCEPTED) |
+                    Q(status=TaskAssignmentStatusChoices.IN_PROGRESS)
+                )
+            else:
+                queryset = queryset.filter(status=status)
         else:
             queryset = queryset.filter(status=TaskAssignmentStatusChoices.ASSIGNED)
 
@@ -84,6 +90,8 @@ class AnnotationExecutionService:
         return assignment
 
     def get_assignment_chunks_queryset(self, assignment: TaskAssignment):
+        from django.db.models import Prefetch
+        
         if assignment.status not in self.ACTIVE_ASSIGNMENT_STATUSES:
             raise ValidationError({"detail": "Task must be accepted before annotation."})
 
@@ -92,9 +100,16 @@ class AnnotationExecutionService:
             annotator=assignment.annotator,
         ).values("id")[:1]
 
+        # Prefetch annotations for the current user
+        annotations_prefetch = Prefetch(
+            "chunk__annotations",
+            queryset=Annotation.objects.filter(annotator=assignment.annotator),
+        )
+
         return (
             TaskChunk.objects.filter(task=assignment.task)
             .select_related("chunk")
+            .prefetch_related(annotations_prefetch)
             .annotate(
                 annotation_exists=Exists(
                     Annotation.objects.filter(

@@ -34,6 +34,20 @@ class TaskAssignmentListSerializer(serializers.Serializer):
         return int((annotated_chunks / total_chunks) * 100) if total_chunks else 0
 
 
+class AnnotationDetailSerializer(serializers.Serializer):
+    """Serializes annotation data for prepopulating form fields on resume/back navigation."""
+    annotation_id = serializers.UUIDField(source="id", read_only=True)
+    domain_match = serializers.CharField(read_only=True)
+    is_amharic = serializers.BooleanField(read_only=True)
+    readability = serializers.CharField(read_only=True)
+    safety_label = serializers.CharField(read_only=True)
+    confidence = serializers.CharField(read_only=True)
+    notes = serializers.CharField(read_only=True, allow_blank=True)
+    time_spent_seconds = serializers.IntegerField(read_only=True, allow_null=True)
+    is_skipped = serializers.BooleanField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
 class TaskChunkSerializer(serializers.Serializer):
     chunk_id = serializers.UUIDField(source="chunk.id", read_only=True)
     order_index = serializers.IntegerField(read_only=True)
@@ -41,7 +55,14 @@ class TaskChunkSerializer(serializers.Serializer):
     token_count = serializers.IntegerField(source="chunk.token_count", read_only=True)
     metadata = serializers.JSONField(source="chunk.metadata", read_only=True)
     annotation_exists = serializers.BooleanField(read_only=True)
-    annotation_id = serializers.UUIDField(read_only=True, allow_null=True)
+    annotation = serializers.SerializerMethodField()
+
+    def get_annotation(self, obj):
+        """Return full annotation data if exists, null otherwise."""
+        annotation = obj.chunk.annotations.first() if obj.chunk.annotations.exists() else None
+        if annotation:
+            return AnnotationDetailSerializer(annotation).data
+        return None
 
 
 class AnnotationCreateSerializer(serializers.Serializer):
