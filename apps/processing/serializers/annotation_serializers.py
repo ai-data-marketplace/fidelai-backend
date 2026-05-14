@@ -53,6 +53,7 @@ class TaskChunkSerializer(serializers.Serializer):
     order_index = serializers.IntegerField(read_only=True)
     text = serializers.CharField(source="chunk.text", read_only=True)
     token_count = serializers.IntegerField(source="chunk.token_count", read_only=True)
+    domain = serializers.CharField(source="task.domain", read_only=True)
     metadata = serializers.JSONField(source="chunk.metadata", read_only=True)
     annotation_exists = serializers.BooleanField(read_only=True)
     annotation = serializers.SerializerMethodField()

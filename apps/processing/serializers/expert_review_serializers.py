@@ -46,6 +46,7 @@ class SourceInfoSerializer(serializers.Serializer):
 class ExpertChunkTaskSerializer(serializers.Serializer):
     chunk_id = serializers.IntegerField(source="chunk.id", read_only=True)
     text = serializers.CharField(source="chunk.text", read_only=True)
+    domain = serializers.CharField(read_only=True)
     metadata = serializers.JSONField(source="chunk.metadata", read_only=True)
     quality_score = serializers.FloatField(source="chunk.quality_score", read_only=True)
     consensus = ConsensusSerializer(source="chunk.consensus", read_only=True)

@@ -98,6 +98,7 @@ class ExpertReviewService:
             {
                 "chunk": tc.chunk,
                 "annotation_count": annotation_counts.get(tc.chunk_id, 0),
+                "domain": task.domain,
             }
             for tc in task_chunks
         ]
