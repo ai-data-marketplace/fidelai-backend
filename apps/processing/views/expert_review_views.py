@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.processing.serializers.expert_review_serializers import (
     ExpertTaskListSerializer,
     ExpertChunkTaskSerializer,
+    ExpertTaskProgressSerializer,
     ExpertReviewSubmissionSerializer,
 )
 from core.permissions import IsExpert
@@ -76,6 +77,25 @@ class ExpertTaskChunksAPIView(APIView):
             serializer = ExpertChunkTaskSerializer(task_chunks["chunks"], many=True, context={"request": request})
             task = task_chunks["task"]
             return Response({"task_id": task.id, "name": task.name, "domain": task.domain, "task_chunks": serializer.data})
+        except PermissionDenied as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except ValidationError as exc:
+            return Response({"detail": exc.detail if hasattr(exc, 'detail') else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ExpertTaskProgressAPIView(APIView):
+    permission_classes = [IsExpert]
+
+    @extend_schema(
+        request=None,
+        responses={200: ExpertTaskProgressSerializer},
+        description="Return progress metrics for the authenticated expert's assignment.",
+    )
+    def get(self, request, id):
+        try:
+            assignment = service.get_assignment_for_user(id, request.user)
+            progress = service.calculate_assignment_progress(assignment)
+            return Response(ExpertTaskProgressSerializer(progress).data, status=status.HTTP_200_OK)
         except PermissionDenied as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         except ValidationError as exc:

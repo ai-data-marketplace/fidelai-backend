@@ -54,6 +54,15 @@ class ExpertChunkTaskSerializer(serializers.Serializer):
     annotation_count = serializers.IntegerField(read_only=True)
 
 
+class ExpertTaskProgressSerializer(serializers.Serializer):
+    assignment_id = serializers.UUIDField(read_only=True)
+    total_chunks = serializers.IntegerField(read_only=True)
+    reviewed_chunks = serializers.IntegerField(read_only=True)
+    remaining_chunks = serializers.IntegerField(read_only=True)
+    progress_percentage = serializers.IntegerField(read_only=True)
+    assignment_status = serializers.CharField(read_only=True)
+
+
 class ExpertReviewSubmissionSerializer(serializers.Serializer):
     domain_match = serializers.ChoiceField(choices=DomainMatchChoices.choices)
     is_amharic = serializers.BooleanField()

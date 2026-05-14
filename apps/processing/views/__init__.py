@@ -12,6 +12,7 @@ from .expert_review_views import (
     ExpertTaskAcceptAPIView,
     ExpertTaskDeclineAPIView,
     ExpertTaskChunksAPIView,
+    ExpertTaskProgressAPIView,
     ExpertChunkResolveAPIView,
 )
 
@@ -26,5 +27,6 @@ __all__ = [
     "ExpertTaskAcceptAPIView",
     "ExpertTaskDeclineAPIView",
     "ExpertTaskChunksAPIView",
+    "ExpertTaskProgressAPIView",
     "ExpertChunkResolveAPIView",
 ]

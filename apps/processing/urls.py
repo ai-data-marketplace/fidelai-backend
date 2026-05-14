@@ -13,6 +13,7 @@ from apps.processing.views.expert_review_views import (
     ExpertTaskAcceptAPIView,
     ExpertTaskDeclineAPIView,
 	ExpertTaskChunksAPIView,
+	ExpertTaskProgressAPIView,
     ExpertChunkResolveAPIView,
 )
 
@@ -28,5 +29,6 @@ urlpatterns = [
 	path("expert/tasks/<uuid:id>/accept/", ExpertTaskAcceptAPIView.as_view(), name="expert-task-accept"),
 	path("expert/tasks/<uuid:id>/decline/", ExpertTaskDeclineAPIView.as_view(), name="expert-task-decline"),
 	path("expert/tasks/<uuid:id>/chunks/", ExpertTaskChunksAPIView.as_view(), name="expert-task-chunks"),
+	path("expert/tasks/<uuid:id>/progress/", ExpertTaskProgressAPIView.as_view(), name="expert-task-progress"),
 	path("expert/chunks/<uuid:chunk_id>/resolve/", ExpertChunkResolveAPIView.as_view(), name="expert-chunk-resolve"),
 ]

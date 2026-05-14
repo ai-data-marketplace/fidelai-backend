@@ -105,6 +105,29 @@ class ExpertReviewService:
 
         return {"task": task, "chunks": payload}
 
+    def calculate_assignment_progress(self, assignment: ExpertTaskAssignment):
+        total_chunks = assignment.expert_task.total_chunks or assignment.expert_task.task_chunks.count()
+        reviewed_chunks = (
+            ExpertReview.objects.filter(
+                expert=assignment.expert,
+                chunk__expert_task_links__expert_task=assignment.expert_task,
+            )
+            .values("chunk_id")
+            .distinct()
+            .count()
+        )
+        remaining_chunks = max(total_chunks - reviewed_chunks, 0)
+        progress_percentage = int((reviewed_chunks / total_chunks) * 100) if total_chunks else 0
+
+        return {
+            "assignment_id": assignment.id,
+            "total_chunks": total_chunks,
+            "reviewed_chunks": reviewed_chunks,
+            "remaining_chunks": remaining_chunks,
+            "progress_percentage": progress_percentage,
+            "assignment_status": assignment.status,
+        }
+
     def resolve_chunk(self, chunk_id, user, validated_data: dict):
         with transaction.atomic():
             try:
@@ -125,21 +148,24 @@ class ExpertReviewService:
                 raise PermissionDenied("Forbidden or no active assignment")
 
             chunk = etc.chunk
-            if ExpertReview.objects.filter(chunk=chunk, expert=user).exists():
-                raise ValidationError({"detail": "Duplicate review"})
-
-            expert_review = ExpertReview.objects.create(
+            expert_review, _ = ExpertReview.objects.update_or_create(
                 chunk=chunk,
                 expert=user,
-                domain_match=validated_data.get("domain_match"),
-                is_amharic=validated_data.get("is_amharic", False),
-                readability=validated_data.get("readability"),
-                safety_label=validated_data.get("safety_label"),
-                confidence=validated_data.get("confidence"),
-                notes=validated_data.get("notes", ""),
-                resolution_reasoning=validated_data.get("resolution_reasoning", ""),
+                defaults={
+                    "domain_match": validated_data.get("domain_match"),
+                    "is_amharic": validated_data.get("is_amharic", False),
+                    "readability": validated_data.get("readability"),
+                    "safety_label": validated_data.get("safety_label"),
+                    "confidence": validated_data.get("confidence"),
+                    "notes": validated_data.get("notes", ""),
+                    "resolution_reasoning": validated_data.get("resolution_reasoning", ""),
+                },
             )
             score_expert_review(expert_review)
+
+            if assignment.status == TaskAssignmentStatusChoices.ACCEPTED:
+                assignment.status = TaskAssignmentStatusChoices.IN_PROGRESS
+                assignment.save(update_fields=["status", "updated_at"])
 
             final = validated_data["final_decision"]
             if final == ChunkStatusChoices.APPROVED:
