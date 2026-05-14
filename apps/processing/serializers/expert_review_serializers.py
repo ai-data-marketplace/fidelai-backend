@@ -44,7 +44,7 @@ class SourceInfoSerializer(serializers.Serializer):
 
 
 class ExpertChunkTaskSerializer(serializers.Serializer):
-    chunk_id = serializers.IntegerField(source="chunk.id", read_only=True)
+    chunk_id = serializers.UUIDField(source="chunk.id", read_only=True)
     text = serializers.CharField(source="chunk.text", read_only=True)
     domain = serializers.CharField(read_only=True)
     metadata = serializers.JSONField(source="chunk.metadata", read_only=True)
