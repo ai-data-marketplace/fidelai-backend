@@ -34,7 +34,7 @@ class ExpertReviewService:
         if status:
             if status == TaskAssignmentStatusChoices.IN_PROGRESS:
                 queryset = queryset.filter(
-                    Q(status=TaskAssignmentStatusChoices.ASSIGNED) |
+                    Q(status=TaskAssignmentStatusChoices.ACCEPTED) |
                     Q(status=TaskAssignmentStatusChoices.IN_PROGRESS)
                 )
             else:
@@ -44,10 +44,10 @@ class ExpertReviewService:
 
         return queryset
 
-    def get_assignment_for_user(self, assignment_id, user):
+    def get_assignment_for_user(self, expert_task_id, user):
         assignment = (
             ExpertTaskAssignment.objects.select_related("expert_task")
-            .filter(pk=assignment_id, expert=user)
+            .filter(expert_task_id=expert_task_id, expert=user)
             .first()
         )
         if not assignment:

@@ -15,7 +15,7 @@ from apps.processing.models.chunk import (
 
 
 class ExpertTaskListSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="expert_task.id", read_only=True)
+    id = serializers.UUIDField(source="expert_task.id", read_only=True)
     name = serializers.CharField(source="expert_task.name", read_only=True)
     domain = serializers.CharField(source="expert_task.domain", read_only=True)
     status = serializers.CharField(read_only=True)
