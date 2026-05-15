@@ -19,3 +19,9 @@ urlpatterns = [
     # path('api/v1/marketplace/', include('apps.marketplace.urls')),
     # path('api/v1/payments/', include('apps.payments.urls')),
 ]
+
+# media root for development
+from django.conf import settings
+from django.conf.urls.static import static
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

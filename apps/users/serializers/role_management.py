@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.users.models import CustomUser, RoleApplication
+from apps.users.models import CustomUser, RoleApplication, VerificationDocument
 
 
 class RoleApplicationUserSummarySerializer(serializers.Serializer):
@@ -11,9 +11,23 @@ class RoleApplicationUserSummarySerializer(serializers.Serializer):
     is_verified = serializers.BooleanField(read_only=True)
 
 
+class VerificationDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VerificationDocument
+        fields = [
+            "id",
+            "file",
+            "file_type",
+            "uploaded_at",
+            "purpose",
+        ]
+        read_only_fields = fields
+
+
 class RoleApplicationAdminSerializer(serializers.ModelSerializer):
     user = RoleApplicationUserSummarySerializer(read_only=True)
     reviewed_by = RoleApplicationUserSummarySerializer(read_only=True)
+    documents = VerificationDocumentSerializer(read_only=True, many=True)
 
     class Meta:
         model = RoleApplication
@@ -26,6 +40,7 @@ class RoleApplicationAdminSerializer(serializers.ModelSerializer):
             "submitted_at",
             "reviewed_at",
             "reviewed_by",
+            "documents",
         ]
         read_only_fields = fields
 
