@@ -6,6 +6,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 
 from apps.users.models import CustomUser, RoleApplication, RoleApplicationStatusChoices
 from apps.users.serializers.role_management import AdminUserListSerializer, RoleApplicationAdminSerializer
@@ -21,7 +22,7 @@ class RoleApplicationPagination(PageNumberPagination):
 @extend_schema_view(
     get=extend_schema(
         responses={200: RoleApplicationAdminSerializer(many=True)},
-        description="List pending role applications for admin review.",
+        description="List role applications for admin review. Defaults to pending when no status is provided.",
     )
 )
 class PendingRoleApplicationListView(generics.ListAPIView):
@@ -30,9 +31,13 @@ class PendingRoleApplicationListView(generics.ListAPIView):
     pagination_class = RoleApplicationPagination
 
     def get_queryset(self):
+        status_filter = self.request.query_params.get("status", RoleApplicationStatusChoices.PENDING)
+        if status_filter not in RoleApplicationStatusChoices.values:
+            raise ValidationError({"detail": "Invalid role application status filter."})
+
         return (
             RoleApplication.objects.select_related("user", "reviewed_by")
-            .filter(status=RoleApplicationStatusChoices.PENDING)
+            .filter(status=status_filter)
             .order_by("-submitted_at")
         )
 
