@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,9 +22,16 @@ from apps.nlp.serializers import (
 from apps.nlp.services import NLPAnnotationService
 
 
+class NLPTaskPagination(PageNumberPagination):
+	page_size = 10
+	page_size_query_param = "page_size"
+	max_page_size = 100
+
+
 class NLPTaskListView(generics.ListAPIView):
 	permission_classes = [IsAuthenticated]
 	serializer_class = NLPTaskListSerializer
+	pagination_class = NLPTaskPagination
 
 	def get_queryset(self):
 		return NLPAnnotationService().get_assigned_tasks_queryset(
