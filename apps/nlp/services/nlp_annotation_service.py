@@ -47,10 +47,16 @@ class NLPAnnotationService:
         NLPTaskAssignmentStatusChoices.IN_PROGRESS,
     )
 
-    def get_assigned_tasks_queryset(self, user):
+    def get_assigned_tasks_queryset(self, user, status_filter: Optional[str] = None):
+        status_value = status_filter or NLPTaskAssignmentStatusChoices.ASSIGNED
+        allowed_statuses = (
+            NLPTaskAssignmentStatusChoices.ACCEPTED,
+            NLPTaskAssignmentStatusChoices.IN_PROGRESS,
+        ) if status_value == "in_progress" else (status_value,)
+
         return (
             NLPTaskAssignment.objects.select_related("task")
-            .filter(annotator=user, status__in=self.TASK_ACCESS_STATUSES)
+            .filter(annotator=user, status__in=allowed_statuses)
             .order_by("-assigned_at")
         )
 

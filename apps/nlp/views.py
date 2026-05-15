@@ -26,7 +26,10 @@ class NLPTaskListView(generics.ListAPIView):
 	serializer_class = NLPTaskListSerializer
 
 	def get_queryset(self):
-		return NLPAnnotationService().get_assigned_tasks_queryset(self.request.user)
+		return NLPAnnotationService().get_assigned_tasks_queryset(
+			self.request.user,
+			status_filter=self.request.query_params.get("status"),
+		)
 
 
 class NLPTaskDetailView(APIView):
