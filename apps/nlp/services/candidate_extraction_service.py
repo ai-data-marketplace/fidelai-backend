@@ -156,12 +156,16 @@ class CandidateExtractionService:
 
             # create NLPChunk record
             try:
+                source_domain = ""
+                if chunk.extracted_document and chunk.extracted_document.raw_document:
+                    source_domain = chunk.extracted_document.raw_document.domain or ""
+                
                 n = self.create_nlp_chunk(
                     source_chunk=chunk,
                     task_type=NLPTaskTypeChoices.SENTIMENT,
                     text=cand.text,
                     source_context=chunk.text,
-                    source_domain=chunk.extracted_document and getattr(chunk.extracted_document, "language_detected", "") or "",
+                    source_domain=source_domain,
                     generated_by_ai=True,
                     ai_model_name=self.model_name or "",
                     ai_confidence_score=cand.confidence,
