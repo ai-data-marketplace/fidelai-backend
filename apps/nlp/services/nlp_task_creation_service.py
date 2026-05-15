@@ -139,9 +139,8 @@ class NLPTaskCreationService:
         """Create a single annotation task for one chunk batch."""
         domain_token = self._format_token(source_domain)
         task_type_token = self._format_token(task_type)
-        today = timezone.localdate()
 
-        task_name = f"{task_type_token}_{domain_token}_{today:%Y_%m_%d}_BATCH_{batch_number:03d}"
+        task_name = f"{task_type_token} {domain_token} BATCH {batch_number:03d}"
         task_description = self._build_task_description(task_type=task_type, source_domain=source_domain)
 
         return NLPAnnotationTask.objects.create(
@@ -208,8 +207,9 @@ class NLPTaskCreationService:
 
     def _format_token(self, value: str) -> str:
         token = self._normalize_domain(value)
-        token = re.sub(r"[^a-z0-9]+", "_", token)
-        token = token.strip("_")
+        token = re.sub(r"[^a-z0-9]+", " ", token)
+        token = token.strip()
+        token = " ".join(token.split())  # collapse multiple spaces
         return token.upper() or "GENERAL"
 
 
