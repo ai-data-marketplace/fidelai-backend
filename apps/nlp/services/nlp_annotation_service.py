@@ -188,8 +188,22 @@ class NLPAnnotationService:
 
         self._maybe_mark_chunk_consensus_ready(chunk=chunk, task=task_chunk.task)
 
+        # Auto-complete assignment if all chunks are annotated
+        self._auto_complete_assignment(assignment)
+
         logger.info("Created NLP annotation id=%s for chunk=%s by user=%s", annotation.pk, chunk.pk, user.pk)
         return annotation
+
+    def _auto_complete_assignment(self, assignment: NLPTaskAssignment) -> None:
+        """Check if assignment is complete and auto-transition to SUBMITTED."""
+        total_chunks = assignment.task.total_chunks or assignment.task.task_chunks.count()
+        annotated_chunks = NLPAnnotation.objects.filter(task_assignment=assignment).count()
+
+        if total_chunks and annotated_chunks >= total_chunks:
+            assignment.status = NLPTaskAssignmentStatusChoices.SUBMITTED
+            assignment.completed_at = timezone.now()
+            assignment.save(update_fields=["status", "completed_at", "updated_at"])
+            logger.info("Auto-completed NLP assignment id=%s (annotator=%s)", assignment.pk, assignment.annotator_id)
 
     def _maybe_mark_chunk_consensus_ready(self, chunk: NLPChunk, task: NLPAnnotationTask) -> None:
         """Move a chunk to consensus-ready when all participating assignees have annotated it.
