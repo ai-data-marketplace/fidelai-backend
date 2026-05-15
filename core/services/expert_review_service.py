@@ -85,8 +85,11 @@ class ExpertReviewService:
         task = assignment.expert_task
         task_chunks = (
             ExpertTaskChunk.objects.filter(expert_task=task)
+            .exclude(chunk__status__in=(ChunkStatusChoices.APPROVED, ChunkStatusChoices.REJECTED, ChunkStatusChoices.RESOLVED))
+            .exclude(chunk__expert_reviews__expert=assignment.expert)
             .select_related("chunk__extracted_document__raw_document", "chunk__consensus")
             .order_by("chunk__order_index")
+            .distinct()
         )
 
         chunk_ids = [tc.chunk_id for tc in task_chunks]
