@@ -46,7 +46,7 @@ class NLPTaskDetailSerializer(serializers.Serializer):
     task_type = serializers.CharField(source="task.task_type", read_only=True)
     status = serializers.CharField(read_only=True)
     total_chunks = serializers.IntegerField(source="task.total_chunks", read_only=True)
-    chunks = NLPTaskChunkSerializer(source="task.task_chunks", many=True, read_only=True)
+    chunks = NLPTaskChunkSerializer(source="task.prefetched_task_chunks", many=True, read_only=True)
 
 
 class NLPTaskAssignmentActionSerializer(serializers.Serializer):

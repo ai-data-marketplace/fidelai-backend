@@ -168,18 +168,20 @@ class NLPAnnotationService:
         if assignment is None:
             raise PermissionDenied("You do not have an accepted assignment for this chunk.")
 
-        if NLPAnnotation.objects.filter(nlp_chunk=chunk, annotator=user).exists():
-            raise NLPAnnotationConflict()
+        # Allow annotators to update their existing annotation instead of causing a conflict.
+        defaults = {
+            "task_assignment": assignment,
+            "task_type": task_chunk.task.task_type,
+            "labels": validated_data.get("labels"),
+            "notes": validated_data.get("notes", ""),
+            "confidence_score": validated_data.get("confidence_score"),
+            "time_spent_seconds": validated_data.get("time_spent_seconds"),
+        }
 
-        annotation = NLPAnnotation.objects.create(
+        annotation, created = NLPAnnotation.objects.update_or_create(
             nlp_chunk=chunk,
             annotator=user,
-            task_assignment=assignment,
-            task_type=task_chunk.task.task_type,
-            labels=validated_data["labels"],
-            notes=validated_data.get("notes", ""),
-            confidence_score=validated_data["confidence_score"],
-            time_spent_seconds=validated_data.get("time_spent_seconds"),
+            defaults=defaults,
         )
 
         if chunk.status != NLPChunkStatusChoices.IN_ANNOTATION:
@@ -191,7 +193,10 @@ class NLPAnnotationService:
         # Auto-complete assignment if all chunks are annotated
         self._auto_complete_assignment(assignment)
 
-        logger.info("Created NLP annotation id=%s for chunk=%s by user=%s", annotation.pk, chunk.pk, user.pk)
+        if created:
+            logger.info("Created NLP annotation id=%s for chunk=%s by user=%s", annotation.pk, chunk.pk, user.pk)
+        else:
+            logger.info("Updated NLP annotation id=%s for chunk=%s by user=%s", annotation.pk, chunk.pk, user.pk)
         return annotation
 
     def _auto_complete_assignment(self, assignment: NLPTaskAssignment) -> None:
