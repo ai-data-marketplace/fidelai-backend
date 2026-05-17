@@ -234,6 +234,9 @@ EMAIL_HOST_PASSWORD = env('EMAIL_PASS')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+CHAPA_SECRET_KEY = env('CHAPA_SECRET_KEY', default='')
+CHAPA_BASE_URL = env('CHAPA_BASE_URL', default='https://api.chapa.co/v1')
+CHAPA_DEFAULT_CURRENCY = env('CHAPA_DEFAULT_CURRENCY', default='ETB')
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')

@@ -6,6 +6,7 @@ from apps.datasets.models.dataset import Dataset
 from apps.datasets.models.assets import DatasetAsset, DatasetFileFormatChoices
 from apps.datasets.models.metrics import DatasetMetrics
 from apps.marketplace.services.dataset_detail_service import DatasetDetailService
+from apps.marketplace.models import DatasetPurchase, PurchaseAccessStatusChoices
 
 
 class DatasetAssetSerializer(serializers.ModelSerializer):
@@ -65,6 +66,8 @@ class DatasetDetailSerializer(DatasetListSerializer):
     samples = serializers.SerializerMethodField()
     sample_quality_scores = serializers.SerializerMethodField()
     total_contributors = serializers.SerializerMethodField()
+    has_active_purchase = serializers.SerializerMethodField()
+    purchase_id = serializers.SerializerMethodField()
 
     class Meta(DatasetListSerializer.Meta):
         fields = DatasetListSerializer.Meta.fields + (
@@ -74,6 +77,8 @@ class DatasetDetailSerializer(DatasetListSerializer):
             "samples",
             "sample_quality_scores",
             "total_contributors",
+            "has_active_purchase",
+            "purchase_id",
         )
 
     def _get_enrichment(self, obj):
@@ -97,3 +102,30 @@ class DatasetDetailSerializer(DatasetListSerializer):
         """Fetch contributor count."""
         enrichment = self._get_enrichment(obj)
         return enrichment["total_contributors"]
+
+    def get_has_active_purchase(self, obj):
+        request = self.context.get("request") if hasattr(self, "context") else None
+        if not request or not getattr(request, "user", None) or request.user.is_anonymous:
+            return False
+        return DatasetPurchase.objects.filter(
+            buyer=request.user, dataset=obj, access_status=PurchaseAccessStatusChoices.ACTIVE
+        ).exists()
+
+    def get_purchase_id(self, obj):
+        request = self.context.get("request") if hasattr(self, "context") else None
+        if not request or not getattr(request, "user", None) or request.user.is_anonymous:
+            return None
+        purchase = DatasetPurchase.objects.filter(
+            buyer=request.user, dataset=obj, access_status=PurchaseAccessStatusChoices.ACTIVE
+        ).order_by("-purchased_at").first()
+        return str(purchase.id) if purchase else None
+
+
+class DatasetPurchaseInitSerializer(serializers.Serializer):
+    order_number = serializers.CharField()
+    tx_ref = serializers.CharField()
+    checkout_url = serializers.URLField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    currency = serializers.CharField()
+    dataset_id = serializers.UUIDField()
+    dataset_title = serializers.CharField()

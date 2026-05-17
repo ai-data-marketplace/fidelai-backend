@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from django.db.models import Q, Prefetch
+from django.shortcuts import get_object_or_404
 from rest_framework import generics
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.views import APIView
 
 from apps.datasets.models.dataset import Dataset
 from apps.datasets.models.assets import DatasetAsset
 from apps.datasets.models.metrics import DatasetMetrics
-from apps.marketplace.serializers import DatasetListSerializer, DatasetDetailSerializer
+from apps.marketplace.serializers import (
+	DatasetDetailSerializer,
+	DatasetListSerializer,
+	DatasetPurchaseInitSerializer,
+)
+from apps.marketplace.services.dataset_purchase_service import DatasetPurchaseService
 
 
 class MarketplacePagination(PageNumberPagination):
@@ -79,3 +88,27 @@ class DatasetDetailView(generics.RetrieveAPIView):
 	queryset = Dataset.objects.select_related("metrics", "created_by", "approved_by").prefetch_related(
 		Prefetch("assets", queryset=DatasetAsset.objects.all())
 	)
+
+
+class DatasetPurchaseInitiateView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request, pk):
+		dataset = get_object_or_404(
+			Dataset.objects.select_related("metrics", "created_by", "approved_by").prefetch_related(
+				Prefetch("assets", queryset=DatasetAsset.objects.all())
+			),
+			pk=pk,
+		)
+		service = DatasetPurchaseService()
+		result = service.initialize_purchase(buyer=request.user, dataset=dataset, request=request)
+		payload = {
+			"order_number": result["order"].order_number,
+			"tx_ref": result["tx_ref"],
+			"checkout_url": result["checkout_url"],
+			"amount": result["order"].total_amount,
+			"currency": result["order"].currency,
+			"dataset_id": dataset.id,
+			"dataset_title": dataset.title,
+		}
+		return Response(DatasetPurchaseInitSerializer(payload).data, status=status.HTTP_201_CREATED)
