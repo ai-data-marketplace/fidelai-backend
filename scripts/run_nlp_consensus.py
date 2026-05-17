@@ -65,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
 def run_direct(batch_size: int, force: bool):
     service = NLPConsensusService()
     print(f"mode=direct batch_size={batch_size} force={force}")
-    summary = service.compute_consensus(batch_size=batch_size, force=force)
+    summary = service.run(batch_size=batch_size, force=force)
     print(f"result={summary}")
     return summary
 

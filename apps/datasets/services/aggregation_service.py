@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from django.core.files.base import ContentFile
+from django.db import models
 from django.db import transaction
 from django.utils import timezone
 
@@ -43,17 +44,18 @@ class DatasetAggregationService:
     @transaction.atomic
     def build_dataset(
         self,
-        title: str,
-        description: str,
-        task_type: str,
+        task_type: str | None = None,
         domains: Optional[List[str]] = None,
         min_agreement_score: float = 0.8,
         max_examples: Optional[int] = None,
         balance_labels: bool = False,
         created_by=None,
         license_type: str = "mit",
-        price: float = 0.0,
+        price: float = 1000.0,
+        title: str | None = None,
+        description: str | None = None,
     ) -> Dataset:
+        task_type = task_type or self._infer_task_type(domains=domains, min_agreement_score=min_agreement_score)
         self._validate_inputs(task_type=task_type, max_examples=max_examples)
         candidates = self._collect_candidates(
             task_type=task_type,
@@ -74,10 +76,10 @@ class DatasetAggregationService:
             max_examples=max_examples,
         )
         dataset = self._create_dataset(
+            task_type=task_type,
+            selected=selected,
             title=title,
             description=description,
-            domains=domains,
-            task_type=task_type,
             build_config=build_config,
             created_by=created_by,
             license_type=license_type,
@@ -89,6 +91,25 @@ class DatasetAggregationService:
 
         dataset.metrics = metrics
         return dataset
+
+    def _infer_task_type(self, domains: Optional[List[str]], min_agreement_score: float) -> str:
+        queryset = NLPChunk.objects.filter(
+            status=NLPChunkStatusChoices.APPROVED,
+            consensus__isnull=False,
+            consensus__agreement_score__gte=min_agreement_score,
+        )
+        if domains:
+            queryset = queryset.filter(source_domain__in=domains)
+
+        top_task_type = (
+            queryset.values("task_type")
+            .annotate(total=models.Count("id"))
+            .order_by("-total", "task_type")
+            .first()
+        )
+        if not top_task_type or not top_task_type.get("task_type"):
+            raise ValueError("no eligible chunks found to infer dataset task type")
+        return top_task_type["task_type"]
 
     def _validate_inputs(self, task_type: str, max_examples: Optional[int]) -> None:
         if task_type not in [choice.value for choice in NLPTaskTypeChoices]:
@@ -234,21 +255,23 @@ class DatasetAggregationService:
 
     def _create_dataset(
         self,
-        title: str,
-        description: str,
-        domains: Optional[List[str]],
         task_type: str,
+        selected: list[dict],
+        title: str | None,
+        description: str | None,
         build_config: dict,
         created_by,
         license_type: str,
         price: float,
     ) -> Dataset:
-        dataset_domain = self._resolve_dataset_domain(domains)
+        dataset_domain = self._resolve_dataset_domain(selected=selected)
+        dataset_title = title or self._build_dataset_title(task_type=task_type, selected=selected)
+        dataset_description = description or self._build_dataset_description(task_type=task_type, selected=selected)
         return Dataset.objects.create(
-            title=title,
-            description=description,
+            title=dataset_title,
+            description=dataset_description,
             domain=dataset_domain,
-            subdomain=domains[0] if domains else "",
+            subdomain=self._resolve_dataset_subdomain(selected=selected),
             language="amharic",
             license_type=license_type,
             price=price,
@@ -260,10 +283,27 @@ class DatasetAggregationService:
             build_config=build_config,
         )
 
-    def _resolve_dataset_domain(self, domains: Optional[List[str]]) -> str:
-        if domains and domains[0] in [choice.value for choice in DomainChoices]:
-            return domains[0]
-        return DomainChoices.GENERAL
+    def _resolve_dataset_domain(self, selected: list[dict]) -> str:
+        domain_counts = Counter(item["nlp_chunk"].source_domain or DomainChoices.GENERAL for item in selected)
+        if not domain_counts:
+            return DomainChoices.GENERAL
+        return sorted(domain_counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+    def _resolve_dataset_subdomain(self, selected: list[dict]) -> str:
+        domains = sorted({item["nlp_chunk"].source_domain or DomainChoices.GENERAL for item in selected})
+        if len(domains) <= 1:
+            return domains[0] if domains else ""
+        return ", ".join(domains)
+
+    def _build_dataset_title(self, task_type: str, selected: list[dict]) -> str:
+        domain = self._resolve_dataset_domain(selected=selected)
+        task_label = task_type.replace("_", " ").strip()
+        return f"{task_label} dataset for {domain}"
+
+    def _build_dataset_description(self, task_type: str, selected: list[dict]) -> str:
+        domain = self._resolve_dataset_domain(selected=selected)
+        task_label = task_type.replace("_", " ").strip()
+        return f"{task_label.title()} dataset for {domain} built from approved NLP consensus chunks."
 
     def _create_dataset_chunks(self, dataset: Dataset, selected: list[dict]) -> None:
         DatasetChunk.objects.bulk_create(

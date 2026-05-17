@@ -22,16 +22,16 @@ def _parse_domains(domains: str | Iterable[str] | None) -> list[str]:
 
 @shared_task
 def DispatchDatasetAggregation(
-    title: str,
-    description: str,
-    task_type: str,
+    task_type: str | None = None,
     domains: str | list[str] | None = None,
     min_agreement_score: float = 0.8,
     max_examples: int | None = None,
     balance_labels: bool = True,
     created_by_id: int | None = None,
     license_type: str = "mit",
-    price: float = 0.0,
+    price: float = 1000.0,
+    title: str | None = None,
+    description: str | None = None,
 ) -> dict:
     """Build a reproducible dataset from approved NLP consensus rows."""
     service = DatasetAggregationService()
@@ -41,13 +41,13 @@ def DispatchDatasetAggregation(
         created_by = get_user_model().objects.filter(pk=created_by_id).first()
 
     logger.info(
-        "Starting dataset aggregation task title=%s task_type=%s domains=%s min_agreement_score=%s max_examples=%s balance_labels=%s",
-        title,
+        "Starting dataset aggregation task task_type=%s domains=%s min_agreement_score=%s max_examples=%s balance_labels=%s price=%s",
         task_type,
         parsed_domains,
         min_agreement_score,
         max_examples,
         balance_labels,
+        price,
     )
     dataset = service.build_dataset(
         title=title,
@@ -66,6 +66,7 @@ def DispatchDatasetAggregation(
         "queued": False,
         "dataset_id": str(dataset.pk),
         "title": dataset.title,
+        "description": dataset.description,
         "task_type": dataset.nlp_task_type,
         "asset_count": dataset.assets.count(),
         "chunk_count": dataset.dataset_chunks.count(),
