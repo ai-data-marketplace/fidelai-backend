@@ -12,7 +12,7 @@ from apps.marketplace.models import DatasetPurchase, PurchaseAccessStatusChoices
 class DatasetAssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = DatasetAsset
-        fields = ("file_format", "file", "file_size_bytes")
+        fields = ("id", "file_format", "file_size_bytes")
 
 
 class DatasetMetricsSerializer(serializers.ModelSerializer):
@@ -148,3 +148,35 @@ class DatasetPurchaseInitSerializer(serializers.Serializer):
     currency = serializers.CharField()
     dataset_id = serializers.UUIDField()
     dataset_title = serializers.CharField()
+
+
+class InventoryPurchaseSerializer(serializers.ModelSerializer):
+    order_number = serializers.CharField(source="order_item.order.order_number", read_only=True)
+    dataset_id = serializers.UUIDField(source="dataset.id", read_only=True)
+    dataset_title = serializers.CharField(source="dataset.title", read_only=True)
+    price = serializers.DecimalField(source="order_item.price_at_purchase", max_digits=12, decimal_places=2, read_only=True)
+    license = serializers.CharField(source="order_item.license_type_at_purchase", read_only=True)
+    status = serializers.SerializerMethodField()
+    assets = DatasetAssetSerializer(source="dataset.assets", many=True, read_only=True)
+
+    class Meta:
+        model = DatasetPurchase
+        fields = (
+            "id",
+            "order_number",
+            "dataset_id",
+            "dataset_title",
+            "purchased_at",
+            "price",
+            "license",
+            "status",
+            "assets",
+            "download_count",
+            "last_downloaded_at",
+        )
+
+    def get_status(self, obj):
+        order = getattr(getattr(obj, "order_item", None), "order", None)
+        if order and getattr(order, "payment_status", None):
+            return order.payment_status
+        return obj.access_status

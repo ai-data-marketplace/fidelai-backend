@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from django.db.models import Q, Prefetch
 from django.shortcuts import get_object_or_404
+from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
@@ -16,8 +18,11 @@ from apps.marketplace.serializers import (
 	DatasetDetailSerializer,
 	DatasetListSerializer,
 	DatasetPurchaseInitSerializer,
+	InventoryPurchaseSerializer,
 )
 from apps.marketplace.services.dataset_purchase_service import DatasetPurchaseService
+from apps.marketplace.models.purchase import DatasetPurchase
+from apps.datasets.models.assets import DatasetAsset
 
 
 class MarketplacePagination(PageNumberPagination):
@@ -112,3 +117,50 @@ class DatasetPurchaseInitiateView(APIView):
 			"dataset_title": dataset.title,
 		}
 		return Response(DatasetPurchaseInitSerializer(payload).data, status=status.HTTP_201_CREATED)
+
+
+class InventoryListView(generics.ListAPIView):
+	permission_classes = [IsAuthenticated]
+	serializer_class = InventoryPurchaseSerializer
+	pagination_class = MarketplacePagination
+
+	def get_queryset(self):
+		user = getattr(self.request, "user", None)
+		if not user or user.is_anonymous:
+			return DatasetPurchase.objects.none()
+
+		qs = (
+			DatasetPurchase.objects.filter(buyer=user)
+			.select_related("order_item__order", "dataset")
+			.prefetch_related(Prefetch("dataset__assets", queryset=DatasetAsset.objects.all()))
+			.order_by("-purchased_at")
+		)
+
+		return qs
+
+
+class DownloadAssetView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request, purchase_id, asset_pk):
+		# verify purchase belongs to user
+		purchase = get_object_or_404(DatasetPurchase, pk=purchase_id, buyer=request.user)
+
+		# fetch asset and ensure it belongs to the purchased dataset
+		asset = get_object_or_404(DatasetAsset, pk=asset_pk)
+		if getattr(asset, "dataset_id", None) != getattr(purchase, "dataset_id", None):
+			raise Http404("Asset not found for this purchase.")
+
+		# increment metrics on the purchase
+		purchase.download_count = (purchase.download_count or 0) + 1
+		purchase.last_downloaded_at = timezone.now()
+		purchase.save(update_fields=["download_count", "last_downloaded_at"])
+
+		# serve the file using storage backend
+		file_field = getattr(asset, "file", None)
+		if not file_field:
+			raise Http404("No file available for this asset.")
+
+		fh = file_field.open("rb")
+		filename = file_field.name.split("/")[-1] if getattr(file_field, "name", None) else None
+		return FileResponse(fh, as_attachment=True, filename=filename)
