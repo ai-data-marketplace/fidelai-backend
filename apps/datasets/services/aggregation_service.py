@@ -333,8 +333,16 @@ class DatasetAggregationService:
             source_chunk = item["nlp_chunk"].source_chunk
             if source_chunk and getattr(source_chunk, "extracted_document_id", None):
                 unique_extracted_docs.add(source_chunk.extracted_document_id)
-            consensus = getattr(item["nlp_chunk"], "consensus", None)
-            if consensus and getattr(consensus, "requires_expert_review", False):
+
+            # Prefer processing-level consensus (Traceable to source QC chunk).
+            proc_consensus = getattr(source_chunk, "consensus", None) if source_chunk is not None else None
+            if proc_consensus and getattr(proc_consensus, "requires_expert_review", False):
+                expert_review_count += 1
+                continue
+
+            # Fallback to NLP consensus flag if processing consensus is absent
+            nlp_consensus = getattr(item["nlp_chunk"], "consensus", None)
+            if nlp_consensus and getattr(nlp_consensus, "requires_expert_review", False):
                 expert_review_count += 1
 
         return DatasetMetrics.objects.create(
