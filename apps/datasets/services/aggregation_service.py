@@ -301,7 +301,8 @@ class DatasetAggregationService:
     def _build_dataset_title(self, task_type: str, selected: list[dict]) -> str:
         domain = self._resolve_dataset_domain(selected=selected)
         task_label = task_type.replace("_", " ").strip()
-        return f"{task_label} dataset for {domain}"
+        chunk_count = len(selected)
+        return f"{domain} dataset for {task_label} - {chunk_count} samples"
 
     def _build_dataset_description(self, task_type: str, selected: list[dict]) -> str:
         domain = self._resolve_dataset_domain(selected=selected)

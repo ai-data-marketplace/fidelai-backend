@@ -44,6 +44,7 @@ class DatasetListSerializer(serializers.ModelSerializer):
             "domain",
             "subdomain",
             "language",
+            "license_type",
             "nlp_task_type",
             "price",
             "version",
