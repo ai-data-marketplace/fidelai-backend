@@ -16,11 +16,11 @@ urlpatterns = [
     path('api/nlp/', include('apps.nlp.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     # path('api/v1/datasets/', include('apps.datasets.urls')),
-    # path('api/v1/marketplace/', include('apps.marketplace.urls')),
+    path('api/marketplace/', include('apps.marketplace.urls')),
     # path('api/v1/payments/', include('apps.payments.urls')),
 ]
 
-# media root for development
+
 from django.conf import settings
 from django.conf.urls.static import static
 if settings.DEBUG:
