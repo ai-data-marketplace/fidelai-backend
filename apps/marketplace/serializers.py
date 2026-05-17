@@ -6,7 +6,7 @@ from apps.datasets.models.dataset import Dataset
 from apps.datasets.models.assets import DatasetAsset, DatasetFileFormatChoices
 from apps.datasets.models.metrics import DatasetMetrics
 from apps.marketplace.services.dataset_detail_service import DatasetDetailService
-from apps.marketplace.models import DatasetPurchase, PurchaseAccessStatusChoices
+from apps.marketplace.models import DatasetPurchase, PurchaseAccessStatusChoices, Order
 
 
 class DatasetAssetSerializer(serializers.ModelSerializer):
@@ -67,7 +67,7 @@ class DatasetDetailSerializer(DatasetListSerializer):
     sample_quality_scores = serializers.SerializerMethodField()
     total_contributors = serializers.SerializerMethodField()
     has_active_purchase = serializers.SerializerMethodField()
-    purchase_id = serializers.SerializerMethodField()
+    purchase_status = serializers.SerializerMethodField()
 
     class Meta(DatasetListSerializer.Meta):
         fields = DatasetListSerializer.Meta.fields + (
@@ -78,7 +78,7 @@ class DatasetDetailSerializer(DatasetListSerializer):
             "sample_quality_scores",
             "total_contributors",
             "has_active_purchase",
-            "purchase_id",
+            "purchase_status",
         )
 
     def _get_enrichment(self, obj):
@@ -111,14 +111,33 @@ class DatasetDetailSerializer(DatasetListSerializer):
             buyer=request.user, dataset=obj, access_status=PurchaseAccessStatusChoices.ACTIVE
         ).exists()
 
-    def get_purchase_id(self, obj):
+    def get_purchase_status(self, obj):
+        """Return purchase status based on Order payment status (source of truth)."""
         request = self.context.get("request") if hasattr(self, "context") else None
         if not request or not getattr(request, "user", None) or request.user.is_anonymous:
             return None
+        
+        # Check for Order (primary source of truth for payment status)
+        order = Order.objects.filter(
+            buyer=request.user, items__dataset=obj
+        ).order_by("-created_at").first()
+        
+        if order:
+            if order.payment_status == "paid":
+                return "active"
+            elif order.payment_status == "pending":
+                return "pending"
+            elif order.payment_status == "failed":
+                return "failed"
+            else:
+                return order.payment_status
+        
+        # Fallback to DatasetPurchase if no order exists (shouldn't happen normally)
         purchase = DatasetPurchase.objects.filter(
-            buyer=request.user, dataset=obj, access_status=PurchaseAccessStatusChoices.ACTIVE
+            buyer=request.user, dataset=obj
         ).order_by("-purchased_at").first()
-        return str(purchase.id) if purchase else None
+        
+        return purchase.access_status if purchase else None
 
 
 class DatasetPurchaseInitSerializer(serializers.Serializer):
