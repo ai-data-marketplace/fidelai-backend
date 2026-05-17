@@ -1,6 +1,8 @@
 import hashlib
+import io
 import json
 import re
+import csv
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import List, Optional
@@ -154,6 +156,7 @@ class DatasetAggregationService:
         queryset = (
             NLPChunk.objects.filter(
                 status=NLPChunkStatusChoices.APPROVED,
+                is_active=True,
                 task_type=task_type,
                 consensus__isnull=False,
                 consensus__agreement_score__gte=min_agreement_score,
@@ -306,9 +309,14 @@ class DatasetAggregationService:
         return f"{task_label.title()} dataset for {domain} built from approved NLP consensus chunks."
 
     def _create_dataset_chunks(self, dataset: Dataset, selected: list[dict]) -> None:
+        # Create mapping rows and mark source NLP chunks as inactive so they aren't reused
         DatasetChunk.objects.bulk_create(
             [DatasetChunk(dataset=dataset, nlp_chunk=item["nlp_chunk"]) for item in selected]
         )
+        # Bulk-deactivate selected NLP chunks
+        nlp_ids = [item["nlp_chunk"].id for item in selected]
+        if nlp_ids:
+            NLPChunk.objects.filter(id__in=nlp_ids).update(is_active=False)
 
     def _create_metrics(self, dataset: Dataset, selected: list[dict]) -> DatasetMetrics:
         total_nlp_chunks = len(selected)
@@ -343,14 +351,43 @@ class DatasetAggregationService:
         )
 
     def _create_export_asset(self, dataset: Dataset, selected: list[dict], metrics: DatasetMetrics) -> DatasetAsset:
-        export_lines = [self._serialize_jsonl_row(dataset=dataset, item=item, metrics=metrics) for item in selected]
-        export_content = "\n".join(export_lines) + "\n"
-        file_name = f"dataset_{dataset.id}_{dataset.nlp_task_type or 'dataset'}.jsonl"
+        # Build minimal export content (only text and label) for JSONL, CSV, TSV
+        rows = []
+        for item in selected:
+            nlp_chunk = item["nlp_chunk"]
+            text = nlp_chunk.text or ""
+            label = item.get("label")
+            rows.append({"text": text, "label": label})
 
-        asset = DatasetAsset(dataset=dataset, file_format=DatasetFileFormatChoices.JSONL, file_size_bytes=len(export_content.encode("utf-8")))
-        asset.file.save(file_name, ContentFile(export_content.encode("utf-8")), save=False)
-        asset.save()
-        return asset
+        assets = []
+
+        # JSONL
+        jsonl_lines = [json.dumps(r, ensure_ascii=False) for r in rows]
+        jsonl_content = "\n".join(jsonl_lines) + "\n"
+        jsonl_name = f"dataset_{dataset.id}_{dataset.nlp_task_type or 'dataset'}.jsonl"
+        asset_jsonl = DatasetAsset(dataset=dataset, file_format=DatasetFileFormatChoices.JSONL, file_size_bytes=len(jsonl_content.encode("utf-8")))
+        asset_jsonl.file.save(jsonl_name, ContentFile(jsonl_content.encode("utf-8")), save=False)
+        asset_jsonl.save()
+        assets.append(asset_jsonl)
+
+        # CSV and TSV
+        for fmt, delimiter in ((DatasetFileFormatChoices.CSV, ","), (DatasetFileFormatChoices.TSV, "\t")):
+            sio = io.StringIO()
+            writer = csv.writer(sio, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
+            # header
+            writer.writerow(["text", "label"])
+            for r in rows:
+                writer.writerow([r["text"], r["label"]])
+            content = sio.getvalue()
+            ext = "csv" if fmt == DatasetFileFormatChoices.CSV else "tsv"
+            file_name = f"dataset_{dataset.id}_{dataset.nlp_task_type or 'dataset'}.{ext}"
+            asset = DatasetAsset(dataset=dataset, file_format=fmt, file_size_bytes=len(content.encode("utf-8")))
+            asset.file.save(file_name, ContentFile(content.encode("utf-8")), save=False)
+            asset.save()
+            assets.append(asset)
+
+        # Return the JSONL asset as primary
+        return assets[0]
 
     def _serialize_jsonl_row(self, dataset: Dataset, item: dict, metrics: DatasetMetrics) -> str:
         nlp_chunk = item["nlp_chunk"]
