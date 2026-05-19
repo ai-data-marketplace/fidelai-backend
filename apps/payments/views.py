@@ -88,10 +88,24 @@ class ChapaBankListView(APIView):
         if banks is None:
             banks = provider_response
 
+        # Transform bank data: map 'id' to 'bank_code' for frontend clarity
+        transformed_banks = []
+        for bank in banks:
+            transformed_banks.append({
+                "bank_code": bank.get("id"),
+                "name": bank.get("name"),
+                "slug": bank.get("slug"),
+                "acct_length": bank.get("acct_length"),
+                "swift": bank.get("swift"),
+                "currency": bank.get("currency"),
+                "can_process_payouts": bank.get("can_process_payouts"),
+                "is_active": bank.get("is_active"),
+            })
+
         return Response(
             {
                 "detail": "Banks retrieved successfully.",
-                "banks": banks,
+                "banks": transformed_banks,
                 "provider_response": provider_response,
             },
             status=status.HTTP_200_OK,

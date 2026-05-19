@@ -64,7 +64,10 @@ class WithdrawalService:
         
         available_points = user_score.available_points
         withdrawable_amount = Decimal(str(available_points)) * rule.score_to_currency_rate
+        lifetime_points_earned = max(0, int(user_score.total_points))
+        total_earned_amount = Decimal(str(lifetime_points_earned)) * rule.score_to_currency_rate
         meets_minimum = withdrawable_amount >= rule.minimum_withdrawal_amount
+        display_available_balance = max(Decimal("0"), withdrawable_amount - wallet.pending_balance)
         
         return {
             "available_points": available_points,
@@ -75,9 +78,9 @@ class WithdrawalService:
             "minimum_amount": float(rule.minimum_withdrawal_amount),
             "meets_minimum": meets_minimum,
             "currency": wallet.currency,
-            "wallet_available_balance": float(wallet.available_balance),
+            "wallet_available_balance": float(display_available_balance),
             "wallet_pending_balance": float(wallet.pending_balance),
-            "wallet_total_earned": float(wallet.total_earned),
+            "wallet_total_earned": float(total_earned_amount),
             "wallet_total_withdrawn": float(wallet.total_withdrawn),
         }
 
@@ -180,8 +183,7 @@ class WithdrawalService:
         """Release a pending withdrawal hold if transfer initiation or verification fails."""
         wallet = withdrawal_request.wallet
         wallet.pending_balance = max(0, wallet.pending_balance - withdrawal_request.amount)
-        wallet.total_earned = max(0, wallet.total_earned - withdrawal_request.amount)
-        wallet.save(update_fields=["pending_balance", "total_earned"])
+        wallet.save(update_fields=["pending_balance"])
 
         metadata = withdrawal_request.metadata or {}
         points_locked = metadata.get("points_locked", 0)
@@ -348,8 +350,7 @@ class WithdrawalService:
             user_score.save(update_fields=["locked_points"])
 
             wallet.pending_balance += amount
-            wallet.total_earned += amount
-            wallet.save(update_fields=["pending_balance", "total_earned"])
+            wallet.save(update_fields=["pending_balance"])
 
             withdrawal_request = WithdrawalRequest.objects.create(
                 user=user,
