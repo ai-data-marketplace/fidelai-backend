@@ -31,6 +31,16 @@ class ChapaClient:
         safe_tx_ref = parse.quote(str(tx_ref), safe="")
         return self._request("GET", f"/transaction/verify/{safe_tx_ref}")
 
+    def list_banks(self) -> dict[str, Any]:
+        return self._request("GET", "/banks")
+
+    def initiate_transfer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/transfers", payload)
+
+    def verify_transfer(self, tx_ref: str) -> dict[str, Any]:
+        safe_tx_ref = parse.quote(str(tx_ref), safe="")
+        return self._request("GET", f"/transfers/verify/{safe_tx_ref}")
+
     def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = {
