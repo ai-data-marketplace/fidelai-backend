@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rest_framework import status
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,14 +11,16 @@ from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
 from apps.marketplace.services.dataset_purchase_service import DatasetPurchaseService
-from apps.payments.models import WithdrawalRequest
+from apps.payments.models import WithdrawalRequest, PayoutRule
 from apps.payments.serializers.withdrawal_serializers import (
     WalletDetailsSerializer,
     WithdrawalRequestCreateSerializer,
     WithdrawalRequestSerializer,
 )
+from apps.payments.serializers.payout_rule_serializers import PayoutRuleSerializer
 from apps.payments.services.chapa_client import ChapaClient, ChapaClientError
 from apps.payments.services.withdrawal_service import WithdrawalService
+from core.permissions.processing import IsAdmin
 
 
 class WithdrawalRequestPagination(PageNumberPagination):
@@ -60,8 +63,6 @@ class ChapaCallbackView(APIView):
 
 
 class WalletDetailsView(APIView):
-    """Get wallet and withdrawable amount details for authenticated user."""
-
     permission_classes = [IsAuthenticated]
     @extend_schema(
 		responses={200: WalletDetailsSerializer}
@@ -80,8 +81,6 @@ class WalletDetailsView(APIView):
 
 
 class ChapaBankListView(APIView):
-    """Expose Chapa supported banks so the frontend can render names and codes."""
-
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -97,7 +96,6 @@ class ChapaBankListView(APIView):
         if banks is None:
             banks = provider_response
 
-        
         transformed_banks = []
         for bank in banks:
             transformed_banks.append({
@@ -122,8 +120,6 @@ class ChapaBankListView(APIView):
 
 
 class WithdrawalRequestInitiateView(APIView):
-    """Initiate a withdrawal request with on-demand score-to-money conversion."""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -162,8 +158,6 @@ class WithdrawalRequestInitiateView(APIView):
 
 
 class WithdrawalTransferVerifyView(APIView):
-    """Verify a Chapa transfer and finalize the withdrawal when successful."""
-
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -199,19 +193,69 @@ class WithdrawalTransferVerifyView(APIView):
 
 
 class WithdrawalRequestListView(ListAPIView):
-    """List all withdrawal requests for the authenticated user with pagination."""
-
     permission_classes = [IsAuthenticated]
     serializer_class = WithdrawalRequestSerializer
     pagination_class = WithdrawalRequestPagination
     
     def get_queryset(self):
-        """Return withdrawal requests for the authenticated user, ordered by most recent."""
         return self.request.user.withdrawal_requests.select_related("wallet").order_by("-requested_at")
+
+
+class PayoutRuleViewSet(viewsets.ModelViewSet):
+    queryset = PayoutRule.objects.all()
+    serializer_class = PayoutRuleSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+    filterset_fields = ["role", "active"]
+    ordering_fields = ["created_at", "role"]
+    ordering = ["-created_at"]
     
-    @extend_schema(
-        responses={200: WithdrawalRequestSerializer(many=True)}
-    )
-    def get(self, request, *args, **kwargs):
-        """Get paginated list of withdrawal requests."""
-        return super().get(request, *args, **kwargs)
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsAdmin])
+    def deactivate(self, request, pk=None):
+        payout_rule = self.get_object()
+        if not payout_rule.active:
+            return Response(
+                {"detail": "This payout rule is already deactivated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payout_rule.active = False
+        payout_rule.save(update_fields=["active"])
+        serializer = self.get_serializer(payout_rule)
+        return Response(
+            {
+                "detail": "Payout rule deactivated successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsAdmin])
+    def activate(self, request, pk=None):
+        payout_rule = self.get_object()
+        if payout_rule.active:
+            return Response(
+                {"detail": "This payout rule is already active."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        PayoutRule.objects.filter(
+            role=payout_rule.role,
+            active=True
+        ).exclude(pk=pk).update(active=False)
+        payout_rule.active = True
+        payout_rule.save(update_fields=["active"])
+        serializer = self.get_serializer(payout_rule)
+        return Response(
+            {
+                "detail": "Payout rule activated successfully. Other active rules for this role have been deactivated.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated, IsAdmin])
+    def active_by_role(self, request):
+        active_rules = PayoutRule.objects.filter(active=True).values_list("role", flat=True).distinct()
+        rules_by_role = {}
+        for role in active_rules:
+            rule = PayoutRule.objects.get(role=role, active=True)
+            rules_by_role[role] = PayoutRuleSerializer(rule).data
+        return Response(rules_by_role, status=status.HTTP_200_OK)

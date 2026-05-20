@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from apps.payments.views import (
     ChapaBankListView,
     ChapaCallbackView,
@@ -6,7 +7,11 @@ from apps.payments.views import (
 	WithdrawalTransferVerifyView,
     WithdrawalRequestInitiateView,
     WithdrawalRequestListView,
+    PayoutRuleViewSet,
 )
+
+router = DefaultRouter()
+router.register(r'payout-rules', PayoutRuleViewSet, basename='payout-rule')
 
 urlpatterns = [
 	path("chapa/callback/", ChapaCallbackView.as_view(), name="payments-chapa-callback"),
@@ -15,4 +20,5 @@ urlpatterns = [
 	path("withdrawals/", WithdrawalRequestInitiateView.as_view(), name="payments-withdrawal-initiate"),
 	path("withdrawals/list/", WithdrawalRequestListView.as_view(), name="payments-withdrawal-list"),
 	path("withdrawals/verify/", WithdrawalTransferVerifyView.as_view(), name="payments-withdrawal-transfer-verify"),
+	path('', include(router.urls)),
 ]
