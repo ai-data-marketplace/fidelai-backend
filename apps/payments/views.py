@@ -6,8 +6,11 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
 from apps.marketplace.services.dataset_purchase_service import DatasetPurchaseService
+from apps.payments.models import WithdrawalRequest
 from apps.payments.serializers.withdrawal_serializers import (
     WalletDetailsSerializer,
     WithdrawalRequestCreateSerializer,
@@ -15,6 +18,12 @@ from apps.payments.serializers.withdrawal_serializers import (
 )
 from apps.payments.services.chapa_client import ChapaClient, ChapaClientError
 from apps.payments.services.withdrawal_service import WithdrawalService
+
+
+class WithdrawalRequestPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
 
 class ChapaCallbackView(APIView):
@@ -187,3 +196,22 @@ class WithdrawalTransferVerifyView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class WithdrawalRequestListView(ListAPIView):
+    """List all withdrawal requests for the authenticated user with pagination."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = WithdrawalRequestSerializer
+    pagination_class = WithdrawalRequestPagination
+    
+    def get_queryset(self):
+        """Return withdrawal requests for the authenticated user, ordered by most recent."""
+        return self.request.user.withdrawal_requests.select_related("wallet").order_by("-requested_at")
+    
+    @extend_schema(
+        responses={200: WithdrawalRequestSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        """Get paginated list of withdrawal requests."""
+        return super().get(request, *args, **kwargs)

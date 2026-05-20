@@ -202,12 +202,18 @@ class WithdrawalService:
         """Release a pending withdrawal hold if transfer initiation or verification fails."""
         wallet = withdrawal_request.wallet
         wallet.pending_balance = max(0, wallet.pending_balance - withdrawal_request.amount)
-        wallet.save(update_fields=["pending_balance"])
 
         metadata = withdrawal_request.metadata or {}
         points_locked = metadata.get("points_locked", 0)
         if points_locked:
             WithdrawalService.release_locked_points(user=withdrawal_request.user, points=points_locked)
+
+        # Recalculate available_balance after releasing points and pending balance
+        rule = WithdrawalService.get_payout_rule(user=withdrawal_request.user)
+        user_score = withdrawal_request.user.user_score
+        withdrawable_amount = Decimal(str(user_score.available_points)) * rule.score_to_currency_rate
+        wallet.available_balance = max(Decimal("0"), withdrawable_amount - wallet.pending_balance)
+        wallet.save(update_fields=["pending_balance", "available_balance"])
 
         withdrawal_request.status = WithdrawalStatusChoices.FAILED
         withdrawal_request.processed_at = timezone.now()
@@ -256,11 +262,18 @@ class WithdrawalService:
             update_fields=["status", "processed_at", "metadata"]
         )
 
-        # Update wallet: deduct from pending_balance if any, increment total_withdrawn
+        # Update wallet: deduct from pending_balance, increment total_withdrawn, recalculate available_balance
         wallet = withdrawal_request.wallet
         wallet.pending_balance = max(0, wallet.pending_balance - withdrawal_request.amount)
         wallet.total_withdrawn += withdrawal_request.amount
-        wallet.save(update_fields=["pending_balance", "total_withdrawn"])
+        
+        # Recalculate available_balance: (available_points * rate) - pending_balance
+        rule = WithdrawalService.get_payout_rule(user=withdrawal_request.user)
+        user_score = withdrawal_request.user.user_score
+        withdrawable_amount = Decimal(str(user_score.available_points)) * rule.score_to_currency_rate
+        wallet.available_balance = max(Decimal("0"), withdrawable_amount - wallet.pending_balance)
+        
+        wallet.save(update_fields=["pending_balance", "total_withdrawn", "available_balance"])
 
         payment_transaction = WithdrawalService._get_withdrawal_payment_transaction(
             withdrawal_request=withdrawal_request
@@ -390,7 +403,10 @@ class WithdrawalService:
             user_score.save(update_fields=["locked_points"])
 
             wallet.pending_balance += amount
-            wallet.save(update_fields=["pending_balance"])
+            # Recalculate available_balance after locking points
+            new_withdrawable_amount = Decimal(str(user_score.available_points)) * rule.score_to_currency_rate
+            wallet.available_balance = max(Decimal("0"), new_withdrawable_amount - wallet.pending_balance)
+            wallet.save(update_fields=["pending_balance", "available_balance"])
 
             withdrawal_request = WithdrawalRequest.objects.create(
                 user=user,
