@@ -7,8 +7,11 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.payments.models import (
+    PaymentTransaction,
     WithdrawalMethodChoices,
     PayoutRule,
+    TransactionStatusChoices,
+    TransactionTypeChoices,
     Wallet,
     WithdrawalRequest,
     WithdrawalStatusChoices,
@@ -145,6 +148,18 @@ class WithdrawalService:
 
                 withdrawal_request.save(update_fields=["status", "metadata"])
 
+                payment_transaction = WithdrawalService._get_withdrawal_payment_transaction(
+                    withdrawal_request=withdrawal_request
+                )
+                if payment_transaction is not None:
+                    payment_transaction.metadata = {
+                        **(payment_transaction.metadata or {}),
+                        "transfer_reference": transfer_reference,
+                        "transfer_initiate_response": transfer_response,
+                        "transfer_initiate_status": provider_status,
+                    }
+                    payment_transaction.save(update_fields=["metadata"])
+
             verification_response = None
             if WithdrawalService._is_transfer_terminal_success(transfer_response):
                 verification_response = self.verify_and_finalize_transfer(
@@ -163,7 +178,11 @@ class WithdrawalService:
                     withdrawal_request=withdrawal_request,
                     failure_reason=str(exc),
                 )
-            raise ValidationError({"detail": f"Chapa transfer failed: {exc}"})
+            WithdrawalService._mark_withdrawal_payment_transaction_failed(
+                withdrawal_request=withdrawal_request,
+                failure_reason=str(exc),
+            )
+            raise ValidationError({"detail": f"Payment couldn't be completed: {str(exc)}"})
 
     @staticmethod
     @transaction.atomic
@@ -199,6 +218,19 @@ class WithdrawalService:
         }
         withdrawal_request.save(update_fields=["status", "processed_at", "metadata"])
 
+        payment_transaction = WithdrawalService._get_withdrawal_payment_transaction(
+            withdrawal_request=withdrawal_request
+        )
+        if payment_transaction is not None:
+            payment_transaction.status = TransactionStatusChoices.FAILED
+            payment_transaction.processed_at = timezone.now()
+            payment_transaction.metadata = {
+                **(payment_transaction.metadata or {}),
+                "failure_reason": failure_reason or metadata.get("failure_reason"),
+                "reverted_at": timezone.now().isoformat(),
+            }
+            payment_transaction.save(update_fields=["status", "processed_at", "metadata"])
+
     @staticmethod
     @transaction.atomic
     def finalize_withdrawal(
@@ -230,13 +262,21 @@ class WithdrawalService:
         wallet.total_withdrawn += withdrawal_request.amount
         wallet.save(update_fields=["pending_balance", "total_withdrawn"])
 
-        # Permanently consume the locked points (no going back)
-        metadata = withdrawal_request.metadata or {}
-        points_locked = metadata.get("points_locked", 0)
-        if points_locked:
-            user_score = withdrawal_request.user.user_score
-            user_score.locked_points = max(0, user_score.locked_points - points_locked)
-            user_score.save(update_fields=["locked_points"])
+        payment_transaction = WithdrawalService._get_withdrawal_payment_transaction(
+            withdrawal_request=withdrawal_request
+        )
+        if payment_transaction is not None:
+            payment_transaction.status = TransactionStatusChoices.COMPLETED
+            payment_transaction.processed_at = timezone.now()
+            payment_transaction.metadata = {
+                **(payment_transaction.metadata or {}),
+                "transfer_reference": transfer_reference,
+                "completed_at": timezone.now().isoformat(),
+            }
+            payment_transaction.save(update_fields=["status", "processed_at", "metadata"])
+
+        # Leave locked_points locked (they represent withdrawn/unavailable points now)
+        # No point deduction needed - the lock prevents re-withdrawal
 
     @staticmethod
     def verify_and_finalize_transfer(*, tx_ref: str) -> dict:
@@ -268,14 +308,14 @@ class WithdrawalService:
                 withdrawal_request=withdrawal_request,
                 failure_reason="Transfer verification failed",
             )
-            raise ValidationError({"detail": "Transfer verification failed.", "provider_response": verify_response})
+            raise ValidationError({"detail": "Transfer verification failed. Withdrawal cancelled and points released."})
 
         WithdrawalService.finalize_withdrawal(
             withdrawal_request=withdrawal_request,
             transfer_reference=tx_ref,
         )
         return {
-            "withdrawal_request": withdrawal_request,
+            "withdrawal_request_id": str(withdrawal_request.id),
             "provider_response": verify_response,
             "transfer_reference": tx_ref,
         }
@@ -358,7 +398,7 @@ class WithdrawalService:
                 amount=amount,
                 payment_method=WithdrawalMethodChoices.BANK_TRANSFER,
                 payment_details={
-                    "bank_code": bank_code,
+                    "bank_code": int(bank_code),
                     "account_number": account_number,
                     "account_name": account_name,
                 },
@@ -371,11 +411,55 @@ class WithdrawalService:
                 },
             )
 
+            PaymentTransaction.objects.create(
+                user=user,
+                wallet=wallet,
+                transaction_type=TransactionTypeChoices.WITHDRAWAL,
+                status=TransactionStatusChoices.PENDING,
+                amount=amount,
+                description=f"Withdrawal request for {user.role}",
+                metadata={
+                    "withdrawal_request_id": str(withdrawal_request.id),
+                    "user_role": user.role,
+                    "points_locked": required_points,
+                    "conversion_rate": float(rule.score_to_currency_rate),
+                    "bank_code": int(bank_code),
+                    "account_number": account_number,
+                    "account_name": account_name,
+                    "direction": "debit",
+                },
+            )
+
         return withdrawal_request, wallet, rule, required_points
 
     @staticmethod
     def _build_transfer_reference(*, withdrawal_request: WithdrawalRequest) -> str:
-        return f"WD-{withdrawal_request.id}-{uuid4().hex[:8].upper()}"
+        return f"WD-{withdrawal_request.id.hex[:8].upper()}-{uuid4().hex[:8].upper()}"
+
+    @staticmethod
+    def _get_withdrawal_payment_transaction(*, withdrawal_request: WithdrawalRequest) -> PaymentTransaction | None:
+        return PaymentTransaction.objects.filter(
+            user=withdrawal_request.user,
+            wallet=withdrawal_request.wallet,
+            transaction_type=TransactionTypeChoices.WITHDRAWAL,
+            metadata__withdrawal_request_id=str(withdrawal_request.id),
+        ).order_by("-created_at").first()
+
+    @staticmethod
+    def _mark_withdrawal_payment_transaction_failed(*, withdrawal_request: WithdrawalRequest, failure_reason: str) -> None:
+        payment_transaction = WithdrawalService._get_withdrawal_payment_transaction(
+            withdrawal_request=withdrawal_request
+        )
+        if payment_transaction is None:
+            return
+
+        payment_transaction.status = TransactionStatusChoices.FAILED
+        payment_transaction.processed_at = timezone.now()
+        payment_transaction.metadata = {
+            **(payment_transaction.metadata or {}),
+            "failure_reason": failure_reason,
+        }
+        payment_transaction.save(update_fields=["status", "processed_at", "metadata"])
 
     @staticmethod
     def _build_transfer_payload(
@@ -392,7 +476,7 @@ class WithdrawalService:
             "amount": str(withdrawal_request.amount),
             "currency": wallet.currency,
             "reference": transfer_reference,
-            "bank_code": payment_details.get("bank_code"),
+            "bank_code": int(payment_details.get("bank_code")),
             "metadata": {
                 "withdrawal_request_id": str(withdrawal_request.id),
                 "user_id": str(withdrawal_request.user_id),

@@ -88,7 +88,7 @@ class ChapaBankListView(APIView):
         if banks is None:
             banks = provider_response
 
-        # Transform bank data: map 'id' to 'bank_code' for frontend clarity
+        
         transformed_banks = []
         for bank in banks:
             transformed_banks.append({
@@ -182,7 +182,7 @@ class WithdrawalTransferVerifyView(APIView):
             {
                 "detail": "Withdrawal transfer verified successfully.",
                 "transfer_reference": result["transfer_reference"],
-                "withdrawal_request_id": str(result["withdrawal_request"].id),
+                "withdrawal_request_id": result["withdrawal_request_id"],
                 "provider_response": result["provider_response"],
             },
             status=status.HTTP_200_OK,
