@@ -10,6 +10,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status
 
 from apps.users.models import CustomUser, EmailVerificationCode, RoleChoices
+from apps.scoring.models import UserScore
 from core.utils.email import send_password_reset_email, send_verification_email
 from core.validators import validate_password_strength
 
@@ -79,6 +80,8 @@ class AuthService:
             role=RoleChoices.UNKNOWN,
             is_verified=False,
         )
+
+        UserScore.objects.create(user=user)
 
         verification = cls._create_code(user)
         send_verification_email(user, verification.code)

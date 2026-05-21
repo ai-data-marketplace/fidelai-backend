@@ -50,11 +50,14 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     verification = serializers.BooleanField(source="is_verified", read_only=True)
     joined_date = serializers.DateTimeField(source="date_joined", read_only=True)
+    email = serializers.EmailField(read_only=True)
 
     class Meta:
         model = CustomUser
         fields = [
+            "id",
             "user",
+            "email",
             "role",
             "status",
             "verification",

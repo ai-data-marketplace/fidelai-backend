@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 
-from apps.users.models import CustomUser, RoleApplication, RoleApplicationStatusChoices
+from apps.users.models import CustomUser, RoleApplication, RoleApplicationStatusChoices, RoleChoices
 from apps.users.serializers.role_management import AdminUserListSerializer, RoleApplicationAdminSerializer
 from core.permissions.processing import IsAdmin
 
@@ -140,3 +140,87 @@ class RejectRoleApplicationView(_BaseRoleApplicationDecisionView):
             application.save(update_fields=["status", "reviewed_at", "reviewed_by", "updated_at"])
 
         return Response(RoleApplicationAdminSerializer(application).data, status=status.HTTP_200_OK)
+
+
+class UserDeactivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=None,
+        responses={200: {"type": "object", "properties": {"detail": {"type": "string"}}}},
+    )
+    def post(self, request, user_id=None):
+        if user_id:
+            if request.user.role != RoleChoices.ADMIN:
+                return Response(
+                    {"detail": "Only admins can deactivate other users."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            try:
+                user = CustomUser.objects.get(id=user_id)
+            except CustomUser.DoesNotExist:
+                return Response(
+                    {"detail": "User not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            user = request.user
+
+        if not user.is_active:
+            return Response(
+                {"detail": "User is already deactivated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        return Response(
+            {"detail": "User deactivated successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class UserReactivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=None,
+        responses={200: {"type": "object", "properties": {"detail": {"type": "string"}}}},
+    )
+    def post(self, request, user_id=None):
+        if user_id:
+            if request.user.role != RoleChoices.ADMIN:
+                return Response(
+                    {"detail": "Only admins can reactivate other users."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            try:
+                user = CustomUser.objects.get(id=user_id)
+            except CustomUser.DoesNotExist:
+                return Response(
+                    {"detail": "User not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            user = request.user
+
+            if not user.is_verified:
+                return Response(
+                    {"detail": "Account must be verified to reactivate."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        if user.is_active:
+            return Response(
+                {"detail": "User is already active."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+
+        return Response(
+            {"detail": "User reactivated successfully."},
+            status=status.HTTP_200_OK,
+        )

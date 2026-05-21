@@ -20,6 +20,8 @@ from .role_management import (
 	AdminUserListView,
 	PendingRoleApplicationListView,
 	RejectRoleApplicationView,
+	UserDeactivateView,
+	UserReactivateView,
 )
 from apps.users.serializers.role_management import ApplicationStatusSerializer
 from apps.users.models import RoleApplication, RoleApplicationStatusChoices

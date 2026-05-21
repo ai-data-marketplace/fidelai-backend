@@ -13,6 +13,8 @@ from apps.users.views import (
 	ApplicationStatusView,
 	ResetPasswordView,
 	VerifyEmailView,
+	UserDeactivateView,
+	UserReactivateView,
 )
 from apps.users.views.onboarding import OnboardingView
 
@@ -26,7 +28,11 @@ urlpatterns = [
 	path("me/", MeView.as_view(), name="auth-me"),
 	path("application-status/", ApplicationStatusView.as_view(), name="application-status"),
 	path("onboarding/complete/", OnboardingView.as_view(), name="onboarding-complete"),
+	path("deactivate/", UserDeactivateView.as_view(), name="user-deactivate"),
+	path("reactivate/", UserReactivateView.as_view(), name="user-reactivate"),
 	path("admin/users/", AdminUserListView.as_view(), name="admin-users"),
+	path("admin/users/<uuid:user_id>/deactivate/", UserDeactivateView.as_view(), name="admin-user-deactivate"),
+		path("admin/users/<uuid:user_id>/reactivate/", UserReactivateView.as_view(), name="admin-user-reactivate"),
 	path("admin/role-applications/", PendingRoleApplicationListView.as_view(), name="admin-role-applications"),
 	path("admin/role-applications/<uuid:pk>/approve/", ApproveRoleApplicationView.as_view(), name="admin-role-application-approve"),
 	path("admin/role-applications/<uuid:pk>/reject/", RejectRoleApplicationView.as_view(), name="admin-role-application-reject"),
