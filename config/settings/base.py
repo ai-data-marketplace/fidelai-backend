@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'apps.notifications.apps.NotificationsConfig',
     'apps.common.apps.CommonConfig',
     'apps.nlp.apps.NlpConfig',
+    'apps.analytics.apps.AnalyticsConfig',
 ]
 
 MIDDLEWARE = [

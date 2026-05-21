@@ -18,6 +18,7 @@ urlpatterns = [
     # path('api/v1/datasets/', include('apps.datasets.urls')),
     path('api/marketplace/', include('apps.marketplace.urls')),
     path('api/payments/', include('apps.payments.urls')),
+    path('api/analytics/', include('apps.analytics.urls')),
 ]
 
 
