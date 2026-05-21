@@ -1,3 +1,40 @@
-from .annotator_analytics import AnnotatorOverviewAnalyticsView
+from drf_spectacular.utils import extend_schema
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-__all__ = ["AnnotatorOverviewAnalyticsView"]
+from apps.analytics.serializers.annotator_analytics import AnnotatorOverviewResponseSerializer
+from apps.analytics.serializers.annotator_dashboard import AnnotatorDashboardResponseSerializer
+from apps.analytics.services.annotator_analytics_service import AnnotatorAnalyticsService
+from apps.users.models import RoleChoices
+
+
+class AnnotatorOverviewAnalyticsView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: AnnotatorOverviewResponseSerializer})
+	def get(self, request):
+		if request.user.role != RoleChoices.ANNOTATOR:
+			return Response({"detail": "Only annotators can access this endpoint."}, status=403)
+
+		data = AnnotatorAnalyticsService(request.user).get_overview()
+		response_payload = {
+			"cards": data["cards"],
+			"graphs": data["graphs"],
+		}
+		return Response(response_payload, status=200)
+
+
+class AnnotatorDashboardView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: AnnotatorDashboardResponseSerializer})
+	def get(self, request):
+		if request.user.role != RoleChoices.ANNOTATOR:
+			return Response({"detail": "Only annotators can access this endpoint."}, status=403)
+
+		data = AnnotatorAnalyticsService(request.user).get_dashboard()
+		return Response(data, status=200)
+
+
+__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView"]

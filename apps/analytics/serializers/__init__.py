@@ -1,3 +1,4 @@
 from .annotator_analytics import AnnotatorOverviewResponseSerializer
+from .annotator_dashboard import AnnotatorDashboardResponseSerializer
 
-__all__ = ["AnnotatorOverviewResponseSerializer"]
+__all__ = ["AnnotatorOverviewResponseSerializer", "AnnotatorDashboardResponseSerializer"]
