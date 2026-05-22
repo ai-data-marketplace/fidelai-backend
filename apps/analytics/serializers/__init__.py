@@ -112,10 +112,24 @@ class ExpertDashboardResponseSerializer(serializers.Serializer):
     recent_activity = RecentActivitySerializer(many=True)
 
 
+class AdminRecentActivitySerializer(serializers.Serializer):
+    id = serializers.CharField()
+    activity_type = serializers.CharField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    timestamp = serializers.CharField(allow_null=True)
+
+
+class AdminDashboardResponseSerializer(serializers.Serializer):
+    cards = CardMetricSerializer(many=True)
+    recent_activity = AdminRecentActivitySerializer(many=True)
+
+
 __all__ = [
     "AnnotatorOverviewResponseSerializer",
     "AnnotatorDashboardResponseSerializer",
     "ContributorDashboardResponseSerializer",
     "ExpertOverviewResponseSerializer",
     "ExpertDashboardResponseSerializer",
+    "AdminDashboardResponseSerializer",
 ]

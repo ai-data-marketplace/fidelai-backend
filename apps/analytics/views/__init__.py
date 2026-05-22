@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.analytics.serializers import AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer, ContributorDashboardResponseSerializer, ExpertDashboardResponseSerializer, ExpertOverviewResponseSerializer
+from apps.analytics.serializers import AdminDashboardResponseSerializer, AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer, ContributorDashboardResponseSerializer, ExpertDashboardResponseSerializer, ExpertOverviewResponseSerializer
 from apps.analytics.services.analytics_service import AnalyticsService
 from apps.users.models import RoleChoices
 
@@ -72,4 +72,16 @@ class ExpertDashboardView(APIView):
 		return Response(data, status=200)
 
 
-__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView", "ContributorDashboardView", "ExpertOverviewAnalyticsView", "ExpertDashboardView"]
+class AdminDashboardView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: AdminDashboardResponseSerializer})
+	def get(self, request):
+		if request.user.role != RoleChoices.ADMIN:
+			return Response({"detail": "Only admins can access this endpoint."}, status=403)
+
+		data = AnalyticsService(request.user).get_admin_dashboard()
+		return Response(data, status=200)
+
+
+__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView", "ContributorDashboardView", "ExpertOverviewAnalyticsView", "ExpertDashboardView", "AdminDashboardView"]
