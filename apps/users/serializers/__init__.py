@@ -55,6 +55,19 @@ class UserSerializer(serializers.Serializer):
     is_verified = serializers.BooleanField(read_only=True)
 
 
+class UserProfileSerializer(serializers.Serializer):
+    id = serializers.UUIDField(source="user.id", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+    role = serializers.CharField(source="user.role", read_only=True)
+    profile_picture = serializers.ImageField(allow_null=True, required=False)
+    phone_number = serializers.CharField(allow_blank=True, required=False)
+    bio = serializers.CharField(allow_blank=True, required=False)
+    country = serializers.CharField(allow_blank=True, required=False)
+    native_language = serializers.CharField(allow_blank=True, required=False)
+    notification_preferences = serializers.JSONField(required=False)
+
+
 from .role_management import RoleApplicationAdminSerializer, RoleApplicationUserSummarySerializer
 
 __all__ = [

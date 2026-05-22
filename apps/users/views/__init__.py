@@ -12,6 +12,7 @@ from apps.users.serializers import (
 	ResendCodeSerializer,
 	ResetPasswordSerializer,
 	UserSerializer,
+	UserProfileSerializer,
 	VerifyEmailSerializer,
 )
 from core.services.auth_service import AuthService, AuthServiceError
@@ -168,6 +169,22 @@ class MeView(APIView):
 	@extend_schema(responses={200: UserSerializer})
 	def get(self, request):
 		serializer = UserSerializer(request.user)
+		return Response(serializer.data)
+
+
+class ProfileView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: UserProfileSerializer})
+	def get(self, request):
+		# Try to fetch related UserProfile if it exists
+		profile = getattr(request.user, "userprofile", None)
+		if profile is None:
+			# Return basic user info with empty profile fields
+			serializer = UserProfileSerializer({"user": request.user})
+			return Response(serializer.data)
+
+		serializer = UserProfileSerializer(profile, context={"request": request})
 		return Response(serializer.data)
 
 
