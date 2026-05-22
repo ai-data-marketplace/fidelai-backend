@@ -62,7 +62,32 @@ class AnnotatorDashboardResponseSerializer(serializers.Serializer):
     recent_activity = RecentActivitySerializer(many=True)
 
 
+class ContributorCardSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    value = serializers.FloatField()
+    display_value = serializers.CharField()
+
+
+class ContributorSubmissionTrendSerializer(serializers.Serializer):
+    period = serializers.CharField()
+    total_submissions = serializers.IntegerField()
+    pending_review = serializers.IntegerField()
+    approved = serializers.IntegerField()
+    rejected = serializers.IntegerField()
+
+
+class ContributorDashboardGraphsSerializer(serializers.Serializer):
+    submissions_over_time = ContributorSubmissionTrendSerializer(many=True)
+
+
+class ContributorDashboardResponseSerializer(serializers.Serializer):
+    cards = ContributorCardSerializer(many=True)
+    graphs = ContributorDashboardGraphsSerializer()
+
+
 __all__ = [
     "AnnotatorOverviewResponseSerializer",
     "AnnotatorDashboardResponseSerializer",
+    "ContributorDashboardResponseSerializer",
 ]

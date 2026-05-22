@@ -1,9 +1,10 @@
 from datetime import timedelta
 
-from django.db.models import Avg, Count, IntegerField, Sum, Value
+from django.db.models import Avg, Count, IntegerField, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
+from apps.documents.models import RawDocument, ReviewStatusChoices
 from apps.processing.models import Annotation, TaskAssignment, TaskAssignmentStatusChoices
 from apps.scoring.models import ScoreLog, UserScore, ScoreActionTypeChoices
 
@@ -323,4 +324,67 @@ class AnnotatorAnalyticsService:
         return {
             "highlights": highlights,
             "recent_activity": recent_activity,
+        }
+
+    def get_contributor_dashboard(self):
+        user_score, _ = UserScore.objects.get_or_create(user=self.user)
+
+        submissions_qs = RawDocument.objects.filter(user=self.user)
+
+        total_submissions = submissions_qs.count()
+        pending_review = submissions_qs.filter(review_status=ReviewStatusChoices.PENDING_REVIEW).count()
+        approved = submissions_qs.filter(review_status=ReviewStatusChoices.APPROVED).count()
+
+        submissions_over_time_qs = (
+            submissions_qs.filter(created_at__gte=self.now - timedelta(days=29))
+            .annotate(period=TruncDate("created_at"))
+            .values("period")
+            .annotate(
+                total_submissions=Count("id"),
+                pending_review=Count("id", filter=Q(review_status=ReviewStatusChoices.PENDING_REVIEW)),
+                approved=Count("id", filter=Q(review_status=ReviewStatusChoices.APPROVED)),
+                rejected=Count("id", filter=Q(review_status=ReviewStatusChoices.REJECTED)),
+            )
+            .order_by("period")
+        )
+
+        return {
+            "cards": [
+                {
+                    "key": "total_submissions",
+                    "label": "Total Submissions",
+                    "value": total_submissions,
+                    "display_value": str(total_submissions),
+                },
+                {
+                    "key": "pending_review",
+                    "label": "Pending Review",
+                    "value": pending_review,
+                    "display_value": f"{pending_review:02d}",
+                },
+                {
+                    "key": "approved",
+                    "label": "Approved",
+                    "value": approved,
+                    "display_value": str(approved),
+                },
+                {
+                    "key": "total_score",
+                    "label": "Total Score",
+                    "value": int(user_score.total_points),
+                    "display_value": f"{int(user_score.total_points):,}",
+                },
+            ],
+            "graphs": {
+                "submissions_over_time": [
+                    {
+                        "period": str(row["period"]),
+                        "total_submissions": int(row["total_submissions"]),
+                        "pending_review": int(row["pending_review"]),
+                        "approved": int(row["approved"]),
+                        "rejected": int(row["rejected"]),
+                    }
+                    for row in submissions_over_time_qs
+                ],
+            },
         }
