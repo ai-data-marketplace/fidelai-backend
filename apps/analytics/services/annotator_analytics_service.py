@@ -302,26 +302,21 @@ class AnnotatorAnalyticsService:
             },
         ]
 
-        recent_annotations = (
-            Annotation.objects.filter(annotator=self.user)
-            .select_related("chunk", "task_assignment__task")
-            .order_by("-created_at")[:5]
+        recent_task_assignments = (
+            TaskAssignment.objects.filter(annotator=self.user)
+            .select_related("task")
+            .order_by("-assigned_at")[:5]
         )
 
         recent_activity = []
-        for annotation in recent_annotations:
+        for assignment in recent_task_assignments:
             recent_activity.append(
                 {
-                    "id": str(annotation.id),
-                    "chunk_id": str(annotation.chunk_id),
-                    "chunk_text": annotation.chunk.text[:100],
-                    "task_name": annotation.task_assignment.task.name,
-                    "domain_match": annotation.domain_match,
-                    "confidence": annotation.confidence,
-                    "readability": annotation.readability,
-                    "safety_label": annotation.safety_label,
-                    "created_at": annotation.created_at.isoformat(),
-                    "is_skipped": annotation.is_skipped,
+                    "id": str(assignment.id),
+                    "task_name": assignment.task.name,
+                    "status": assignment.status,
+                    "assigned_at": assignment.assigned_at.isoformat(),
+                    "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
                 }
             )
 

@@ -3,8 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.analytics.serializers.annotator_analytics import AnnotatorOverviewResponseSerializer
-from apps.analytics.serializers.annotator_dashboard import AnnotatorDashboardResponseSerializer
+from apps.analytics.serializers import AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer
 from apps.analytics.services.annotator_analytics_service import AnnotatorAnalyticsService
 from apps.users.models import RoleChoices
 
