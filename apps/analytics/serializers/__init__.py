@@ -86,8 +86,36 @@ class ContributorDashboardResponseSerializer(serializers.Serializer):
     graphs = ContributorDashboardGraphsSerializer()
 
 
+class ExpertCardSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    value = serializers.FloatField()
+    display_value = serializers.CharField()
+
+
+class ExpertReviewTrendSerializer(serializers.Serializer):
+    period = serializers.CharField()
+    total_reviews = serializers.IntegerField()
+
+
+class ExpertDashboardGraphsSerializer(serializers.Serializer):
+    review_trend = ExpertReviewTrendSerializer(many=True)
+
+
+class ExpertOverviewResponseSerializer(serializers.Serializer):
+    cards = ExpertCardSerializer(many=True)
+    graphs = ExpertDashboardGraphsSerializer()
+
+
+class ExpertDashboardResponseSerializer(serializers.Serializer):
+    highlights = DashboardHighlightSerializer(many=True)
+    recent_activity = RecentActivitySerializer(many=True)
+
+
 __all__ = [
     "AnnotatorOverviewResponseSerializer",
     "AnnotatorDashboardResponseSerializer",
     "ContributorDashboardResponseSerializer",
+    "ExpertOverviewResponseSerializer",
+    "ExpertDashboardResponseSerializer",
 ]

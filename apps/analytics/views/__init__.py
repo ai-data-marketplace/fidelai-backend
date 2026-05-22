@@ -3,8 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.analytics.serializers import AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer, ContributorDashboardResponseSerializer
-from apps.analytics.services.annotator_analytics_service import AnnotatorAnalyticsService
+from apps.analytics.serializers import AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer, ContributorDashboardResponseSerializer, ExpertDashboardResponseSerializer, ExpertOverviewResponseSerializer
+from apps.analytics.services.analytics_service import AnalyticsService
 from apps.users.models import RoleChoices
 
 
@@ -16,7 +16,7 @@ class AnnotatorOverviewAnalyticsView(APIView):
 		if request.user.role != RoleChoices.ANNOTATOR:
 			return Response({"detail": "Only annotators can access this endpoint."}, status=403)
 
-		data = AnnotatorAnalyticsService(request.user).get_overview()
+		data = AnalyticsService(request.user).get_overview()
 		response_payload = {
 			"cards": data["cards"],
 			"graphs": data["graphs"],
@@ -32,7 +32,7 @@ class AnnotatorDashboardView(APIView):
 		if request.user.role != RoleChoices.ANNOTATOR:
 			return Response({"detail": "Only annotators can access this endpoint."}, status=403)
 
-		data = AnnotatorAnalyticsService(request.user).get_dashboard()
+		data = AnalyticsService(request.user).get_dashboard()
 		return Response(data, status=200)
 
 
@@ -44,8 +44,32 @@ class ContributorDashboardView(APIView):
 		if request.user.role != RoleChoices.CONTRIBUTOR:
 			return Response({"detail": "Only contributors can access this endpoint."}, status=403)
 
-		data = AnnotatorAnalyticsService(request.user).get_contributor_dashboard()
+		data = AnalyticsService(request.user).get_contributor_dashboard()
 		return Response(data, status=200)
 
 
-__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView", "ContributorDashboardView"]
+class ExpertOverviewAnalyticsView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: ExpertOverviewResponseSerializer})
+	def get(self, request):
+		if request.user.role != RoleChoices.EXPERT:
+			return Response({"detail": "Only experts can access this endpoint."}, status=403)
+
+		data = AnalyticsService(request.user).get_expert_overview()
+		return Response(data, status=200)
+
+
+class ExpertDashboardView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: ExpertDashboardResponseSerializer})
+	def get(self, request):
+		if request.user.role != RoleChoices.EXPERT:
+			return Response({"detail": "Only experts can access this endpoint."}, status=403)
+
+		data = AnalyticsService(request.user).get_expert_dashboard()
+		return Response(data, status=200)
+
+
+__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView", "ContributorDashboardView", "ExpertOverviewAnalyticsView", "ExpertDashboardView"]

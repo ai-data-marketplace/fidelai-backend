@@ -1,3 +1,5 @@
-from .annotator_analytics_service import AnnotatorAnalyticsService
+from .analytics_service import AnalyticsService
 
-__all__ = ["AnnotatorAnalyticsService"]
+AnnotatorAnalyticsService = AnalyticsService
+
+__all__ = ["AnalyticsService", "AnnotatorAnalyticsService"]
