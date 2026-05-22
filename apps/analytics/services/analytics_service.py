@@ -472,6 +472,7 @@ class AnalyticsService:
 
     def get_expert_dashboard(self):
         assignments_qs = ExpertTaskAssignment.objects.filter(expert=self.user)
+        reviews_qs = ExpertReview.objects.filter(expert=self.user)
 
         total_assigned_tasks = assignments_qs.count()
         active_tasks = assignments_qs.filter(
@@ -482,6 +483,7 @@ class AnalyticsService:
             )
         ).count()
         submitted_tasks = assignments_qs.filter(status=TaskAssignmentStatusChoices.SUBMITTED).count()
+        total_reviews = reviews_qs.count()
         recent_assignments = assignments_qs.select_related("expert_task").order_by("-assigned_at")[:5]
 
         return {
@@ -503,6 +505,12 @@ class AnalyticsService:
                     "label": "Submitted Tasks",
                     "value": submitted_tasks,
                     "display_value": str(submitted_tasks),
+                },
+                {
+                    "key": "reviews_submitted",
+                    "label": "Reviews Submitted",
+                    "value": total_reviews,
+                    "display_value": str(total_reviews),
                 },
             ],
             "recent_activity": [
@@ -990,6 +998,7 @@ class AnalyticsService:
 
     def get_expert_dashboard(self):
         assignments_qs = ExpertTaskAssignment.objects.filter(expert=self.user)
+        reviews_qs = ExpertReview.objects.filter(expert=self.user)
 
         total_assigned_tasks = assignments_qs.count()
         active_tasks = assignments_qs.filter(
@@ -1000,6 +1009,7 @@ class AnalyticsService:
             )
         ).count()
         submitted_tasks = assignments_qs.filter(status=TaskAssignmentStatusChoices.SUBMITTED).count()
+        total_reviews = reviews_qs.count()
         recent_assignments = assignments_qs.select_related("expert_task").order_by("-assigned_at")[:5]
 
         return {
@@ -1021,6 +1031,12 @@ class AnalyticsService:
                     "label": "Submitted Tasks",
                     "value": submitted_tasks,
                     "display_value": str(submitted_tasks),
+                },
+                {
+                    "key": "reviews_submitted",
+                    "label": "Reviews Submitted",
+                    "value": total_reviews,
+                    "display_value": str(total_reviews),
                 },
             ],
             "recent_activity": [
