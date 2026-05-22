@@ -3,7 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.analytics.serializers import AdminDashboardResponseSerializer, AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer, ContributorDashboardResponseSerializer, ExpertDashboardResponseSerializer, ExpertOverviewResponseSerializer
+from apps.analytics.serializers import AdminDashboardResponseSerializer, AnnotatorOverviewResponseSerializer, AnnotatorDashboardResponseSerializer, ContributorDashboardResponseSerializer, ExpertDashboardResponseSerializer, ExpertOverviewResponseSerializer, BuyerDashboardResponseSerializer
+from apps.marketplace.serializers import DatasetListSerializer
 from apps.analytics.services.analytics_service import AnalyticsService
 from apps.users.models import RoleChoices
 
@@ -84,4 +85,21 @@ class AdminDashboardView(APIView):
 		return Response(data, status=200)
 
 
-__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView", "ContributorDashboardView", "ExpertOverviewAnalyticsView", "ExpertDashboardView", "AdminDashboardView"]
+class BuyerDashboardView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(responses={200: BuyerDashboardResponseSerializer})
+	def get(self, request):
+		from apps.users.models import RoleChoices
+
+		if request.user.role != RoleChoices.BUYER:
+			return Response({"detail": "Only buyers can access this endpoint."}, status=403)
+
+		data = AnalyticsService(request.user).get_buyer_dashboard()
+
+		datasets = DatasetListSerializer(data.get("datasets", []), many=True, context={"request": request}).data
+		recent = DatasetListSerializer(data.get("recent_datasets", []), many=True, context={"request": request}).data
+
+		return Response({"datasets": datasets, "recent_datasets": recent}, status=200)
+
+__all__ = ["AnnotatorOverviewAnalyticsView", "AnnotatorDashboardView", "ContributorDashboardView", "ExpertOverviewAnalyticsView", "ExpertDashboardView", "AdminDashboardView", "BuyerDashboardView"]

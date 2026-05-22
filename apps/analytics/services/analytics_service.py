@@ -395,6 +395,37 @@ class AnalyticsService:
             ],
         }
 
+    def get_buyer_dashboard(self):
+        from apps.marketplace.models import DatasetPurchase
+        from apps.datasets.models import Dataset
+
+        # recent purchases (most recent 2)
+        purchases_qs = DatasetPurchase.objects.filter(buyer=self.user).select_related("dataset").order_by("-purchased_at")
+        recent_purchases = list(purchases_qs[:2])
+        recent_datasets = [p.dataset for p in recent_purchases]
+
+        # If user has purchase history, recommend datasets from domains they've bought
+        if purchases_qs.exists():
+            domains = list(purchases_qs.values_list("dataset__domain", flat=True).distinct())
+            recommended_qs = Dataset.objects.filter(domain__in=domains).exclude(dataset_purchases__buyer=self.user).select_related(
+                "metrics", "created_by", "approved_by"
+            ).prefetch_related("assets").order_by("-created_at")[:4]
+            recommended = list(recommended_qs)
+
+            # fill up to 4 with newest datasets if not enough
+            if len(recommended) < 4:
+                exclude_ids = [d.id for d in recommended]
+                more_qs = Dataset.objects.exclude(id__in=exclude_ids).exclude(dataset_purchases__buyer=self.user).select_related(
+                    "metrics", "created_by", "approved_by"
+                ).prefetch_related("assets").order_by("-created_at")[: 4 - len(recommended)]
+                recommended.extend(list(more_qs))
+        else:
+            # no purchases -> show 4 random datasets
+            recommended_qs = Dataset.objects.select_related("metrics", "created_by", "approved_by").prefetch_related("assets").order_by("?")[:4]
+            recommended = list(recommended_qs)
+
+        return {"datasets": recommended, "recent_datasets": recent_datasets}
+
     def get_admin_dashboard(self):
         from apps.datasets.models import Dataset, DatasetStatusChoices
         from apps.marketplace.models import Order, PaymentStatusChoices

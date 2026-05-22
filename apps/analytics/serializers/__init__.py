@@ -124,7 +124,13 @@ class AdminDashboardResponseSerializer(serializers.Serializer):
     cards = CardMetricSerializer(many=True)
     recent_activity = AdminRecentActivitySerializer(many=True)
 
+ 
+from apps.marketplace.serializers import DatasetListSerializer
 
+
+class BuyerDashboardResponseSerializer(serializers.Serializer):
+    datasets = DatasetListSerializer(many=True)
+    recent_datasets = DatasetListSerializer(many=True)
 __all__ = [
     "AnnotatorOverviewResponseSerializer",
     "AnnotatorDashboardResponseSerializer",
@@ -132,4 +138,5 @@ __all__ = [
     "ExpertOverviewResponseSerializer",
     "ExpertDashboardResponseSerializer",
     "AdminDashboardResponseSerializer",
+    "BuyerDashboardResponseSerializer",
 ]
