@@ -68,6 +68,51 @@ class UserProfileSerializer(serializers.Serializer):
     notification_preferences = serializers.JSONField(required=False)
 
 
+
+class UserProfileUpdateSerializer(serializers.Serializer):
+    full_name = serializers.CharField(required=False)
+    profile_picture = serializers.ImageField(required=False, allow_null=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
+    bio = serializers.CharField(required=False, allow_blank=True)
+    country = serializers.CharField(required=False, allow_blank=True)
+    native_language = serializers.CharField(required=False, allow_blank=True)
+    notification_preferences = serializers.JSONField(required=False)
+
+    def update(self, instance, validated_data):
+        # instance can be a UserProfile model instance or a dict containing {'user': user}
+        from apps.users.models.profile import UserProfile
+
+        user = None
+        profile = None
+        if isinstance(instance, dict) and instance.get("user"):
+            user = instance.get("user")
+            profile = getattr(user, "userprofile", None)
+        else:
+            profile = instance
+            user = getattr(profile, "user", None)
+
+        # update user full_name if provided
+        if "full_name" in validated_data and user:
+            user.full_name = validated_data.pop("full_name")
+            user.save(update_fields=["full_name"])
+
+        # create profile if missing
+        if profile is None and user:
+            create_data = {k: v for k, v in validated_data.items()}
+            profile = UserProfile.objects.create(user=user, **create_data)
+            return profile
+
+        # update profile fields
+        for key, value in validated_data.items():
+            setattr(profile, key, value)
+        profile.save()
+        return profile
+
+    def create(self, validated_data):
+        # Not used directly; kept for serializer.save() compatibility
+        raise NotImplementedError()
+
+
 from .role_management import RoleApplicationAdminSerializer, RoleApplicationUserSummarySerializer
 
 __all__ = [

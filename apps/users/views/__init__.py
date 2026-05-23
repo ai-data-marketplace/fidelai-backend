@@ -13,6 +13,7 @@ from apps.users.serializers import (
 	ResetPasswordSerializer,
 	UserSerializer,
 	UserProfileSerializer,
+	UserProfileUpdateSerializer,
 	VerifyEmailSerializer,
 )
 from core.services.auth_service import AuthService, AuthServiceError
@@ -186,6 +187,19 @@ class ProfileView(APIView):
 
 		serializer = UserProfileSerializer(profile, context={"request": request})
 		return Response(serializer.data)
+
+	@extend_schema(request=UserProfileUpdateSerializer, responses={200: UserProfileSerializer})
+	def patch(self, request):
+		profile = getattr(request.user, "userprofile", None)
+
+		# Use serializer with instance so .save() calls update
+		instance = profile if profile is not None else {"user": request.user}
+		serializer = UserProfileUpdateSerializer(instance=instance, data=request.data, partial=True)
+		serializer.is_valid(raise_exception=True)
+		updated = serializer.save()
+
+		resp_serializer = UserProfileSerializer(updated if updated is not None else {"user": request.user}, context={"request": request})
+		return Response(resp_serializer.data)
 
 
 class ApplicationStatusView(APIView):
