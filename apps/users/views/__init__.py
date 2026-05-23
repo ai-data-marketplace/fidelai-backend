@@ -27,6 +27,7 @@ from .role_management import (
 )
 from apps.users.serializers.role_management import ApplicationStatusSerializer
 from apps.users.models import RoleApplication, RoleApplicationStatusChoices
+from apps.notifications.services.notification_service import notify_account_verified
 
 
 class RegisterView(APIView):
@@ -65,6 +66,9 @@ class VerifyEmailView(APIView):
 			user = AuthService.verify_email_code(**serializer.validated_data)
 		except AuthServiceError as exc:
 			return Response({"message": exc.message}, status=exc.status_code)
+
+		# Send account verified notification
+		notify_account_verified(user)
 
 		refresh = RefreshToken.for_user(user)
 		return Response(

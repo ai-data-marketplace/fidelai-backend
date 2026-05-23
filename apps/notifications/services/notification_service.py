@@ -110,3 +110,65 @@ def notify_task_reviewed(user, chunk_id):
         notification_type=NotificationTypeChoices.TASK_REVIEWED,
         context={"chunk_id": chunk_id},
     )
+
+# --- Account notifications ---
+def notify_account_verified(user):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.ACCOUNT_VERIFIED,
+        context={"full_name": user.full_name},
+    )
+
+def notify_role_approved(user, role):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.ROLE_APPROVED,
+        context={"role": role},
+    )
+
+def notify_role_rejected(user, role):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.ROLE_REJECTED,
+        context={"role": role},
+    )
+
+def notify_password_reset(user):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.PASSWORD_RESET,
+        context={"full_name": user.full_name},
+    )
+
+# --- Marketplace and payout notifications ---
+def notify_dataset_purchased(user, dataset):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.DATASET_PURCHASED,
+        context={"dataset_title": dataset.title},
+        related_dataset=dataset,
+    )
+
+def notify_dataset_sold(user, dataset):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.DATASET_SOLD,
+        context={"dataset_title": dataset.title},
+        related_dataset=dataset,
+    )
+
+def notify_payout_processed(user, withdrawal_request):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.PAYOUT_PROCESSED,
+        context={"amount": str(withdrawal_request.amount)},
+        related_order=None,
+    )
+
+def notify_withdrawal_update(user, withdrawal_request):
+    return send_notification(
+        user=user,
+        notification_type=NotificationTypeChoices.WITHDRAWAL_UPDATE,
+        context={"amount": str(withdrawal_request.amount), "status": withdrawal_request.status},
+        related_order=None,
+    )

@@ -19,6 +19,8 @@ from apps.payments.models import (
 from apps.payments.services.chapa_client import ChapaClient, ChapaClientError
 from apps.scoring.models import UserScore
 from apps.users.models.roles import RoleChoices
+from apps.notifications.services.notification_service import notify_withdrawal_update , notify_payout_processed
+
 
 
 class WithdrawalService:
@@ -262,6 +264,9 @@ class WithdrawalService:
             update_fields=["status", "processed_at", "metadata"]
         )
 
+        # Send payout processed notification
+        notify_payout_processed(withdrawal_request.user, withdrawal_request)
+
         # Update wallet: deduct from pending_balance, increment total_withdrawn, recalculate available_balance
         wallet = withdrawal_request.wallet
         wallet.pending_balance = max(0, wallet.pending_balance - withdrawal_request.amount)
@@ -327,6 +332,8 @@ class WithdrawalService:
             withdrawal_request=withdrawal_request,
             transfer_reference=tx_ref,
         )
+
+        notify_withdrawal_update(withdrawal_request.user, withdrawal_request)
         return {
             "withdrawal_request_id": str(withdrawal_request.id),
             "provider_response": verify_response,
