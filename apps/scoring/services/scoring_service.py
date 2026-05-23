@@ -14,6 +14,8 @@ ANNOTATOR_ACTIONS = (
 
 CONTRIBUTOR_ACTIONS = (
     ScoreActionTypeChoices.DOCUMENT_APPROVED,
+    ScoreActionTypeChoices.DATASET_INCLUDED,
+    ScoreActionTypeChoices.DATASET_SOLD,
 )
 
 EXPERT_ACTIONS = (
@@ -132,4 +134,50 @@ def score_document_approved(raw_document):
         action_type=ScoreActionTypeChoices.DOCUMENT_APPROVED,
         document=raw_document,
         metadata={"raw_document_id": str(raw_document.id)},
+    )
+
+
+def contributor_users_for_dataset(dataset):
+    from apps.datasets.models.chunk_map import DatasetChunk
+    from apps.users.models import CustomUser
+
+    contributor_ids = (
+        DatasetChunk.objects.filter(dataset=dataset)
+        .exclude(nlp_chunk__source_chunk__extracted_document__raw_document__user_id__isnull=True)
+        .values_list(
+            "nlp_chunk__source_chunk__extracted_document__raw_document__user_id",
+            flat=True,
+        )
+        .distinct()
+    )
+    return CustomUser.objects.filter(id__in=contributor_ids)
+
+
+def _award_dataset_contributors(*, dataset, action_type):
+    metadata = {"dataset_id": str(dataset.id)}
+    score_logs = []
+    for user in contributor_users_for_dataset(dataset):
+        score_log = award_points(
+            user=user,
+            role=RoleChoices.CONTRIBUTOR,
+            action_type=action_type,
+            dataset=dataset,
+            metadata=metadata,
+        )
+        if score_log is not None:
+            score_logs.append(score_log)
+    return score_logs
+
+
+def score_dataset_included(dataset):
+    return _award_dataset_contributors(
+        dataset=dataset,
+        action_type=ScoreActionTypeChoices.DATASET_INCLUDED,
+    )
+
+
+def score_dataset_sold(dataset):
+    return _award_dataset_contributors(
+        dataset=dataset,
+        action_type=ScoreActionTypeChoices.DATASET_SOLD,
     )

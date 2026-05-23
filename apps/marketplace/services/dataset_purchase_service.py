@@ -28,6 +28,7 @@ from apps.payments.models import (
 from apps.payments.services.chapa_client import ChapaClient, ChapaClientError
 from apps.users.models.roles import RoleChoices
 from apps.notifications.services.notification_service import notify_dataset_purchased, notify_dataset_sold
+from apps.scoring.services import score_dataset_sold
 
 
 class DatasetPurchaseService:
@@ -163,6 +164,8 @@ class DatasetPurchaseService:
         # Optionally, notify the dataset owner (seller)
         if hasattr(order_item.dataset, "created_by") and order_item.dataset.created_by:
             notify_dataset_sold(order_item.dataset.created_by, order_item.dataset)
+
+        score_dataset_sold(order_item.dataset)
 
         order.payment_status = PaymentStatusChoices.PAID
         order.order_status = OrderStatusChoices.COMPLETED

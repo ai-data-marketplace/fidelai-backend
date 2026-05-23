@@ -17,6 +17,7 @@ from apps.datasets.models.chunk_map import DatasetChunk
 from apps.datasets.models.dataset import Dataset, DatasetStatusChoices
 from apps.datasets.models.metrics import DatasetMetrics
 from apps.documents.models import DomainChoices
+from apps.scoring.services import score_dataset_included
 from apps.nlp.models.choices import NLPChunkStatusChoices, NLPTaskTypeChoices
 from apps.nlp.models.nlp_chunk import NLPChunk
 
@@ -90,6 +91,7 @@ class DatasetAggregationService:
         self._create_dataset_chunks(dataset=dataset, selected=selected)
         metrics = self._create_metrics(dataset=dataset, selected=selected)
         self._create_export_asset(dataset=dataset, selected=selected, metrics=metrics)
+        score_dataset_included(dataset)
 
         dataset.metrics = metrics
         return dataset
