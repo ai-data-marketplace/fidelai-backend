@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.cache import cache
+from django.db import transaction
 from django.utils.encoding import force_bytes, force_str
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -28,6 +29,7 @@ class AuthService:
     MAX_FAILED_ATTEMPTS = 5
     RESEND_SECONDS = 60
     PASSWORD_RESET_TOKEN_GENERATOR = PasswordResetTokenGenerator()
+    DELETED_EMAIL_DOMAIN = "deleted.local"
 
     @staticmethod
     def _generate_6_digit_code():
@@ -209,3 +211,86 @@ class AuthService:
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
+
+    @classmethod
+    def change_password(cls, user, current_password, new_password):
+        if not user.check_password(current_password):
+            raise AuthServiceError("Current password is incorrect.")
+
+        try:
+            validate_password_strength(new_password)
+        except ValueError as exc:
+            raise AuthServiceError(str(exc)) from exc
+
+        if user.check_password(new_password):
+            raise AuthServiceError("New password must be different from the current password.")
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+    @classmethod
+    def _is_account_deleted(cls, user):
+        email = (user.email or "").lower()
+        return email.endswith(f"@{cls.DELETED_EMAIL_DOMAIN}")
+
+    @classmethod
+    def delete_account(cls, user, password):
+        if cls._is_account_deleted(user):
+            raise AuthServiceError("This account has already been deleted.")
+
+        if user.is_staff or user.is_superuser:
+            raise AuthServiceError(
+                "Staff accounts cannot be deleted through this endpoint.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not user.check_password(password):
+            raise AuthServiceError("Password is incorrect.")
+
+        with transaction.atomic():
+            cls._invalidate_active_codes(user)
+            EmailVerificationCode.objects.filter(user=user).delete()
+
+            profile = getattr(user, "userprofile", None)
+            if profile is not None:
+                if profile.profile_picture:
+                    profile.profile_picture.delete(save=False)
+                profile.phone_number = ""
+                profile.bio = ""
+                profile.country = ""
+                profile.native_language = ""
+                profile.notification_preferences = {}
+                profile.save(
+                    update_fields=[
+                        "phone_number",
+                        "bio",
+                        "country",
+                        "native_language",
+                        "notification_preferences",
+                        "updated_at",
+                    ]
+                )
+
+            user.email = f"deleted.{user.pk}@{cls.DELETED_EMAIL_DOMAIN}"
+            user.username = f"deleted_{user.pk}"
+            user.full_name = "Deleted User"
+            user.is_active = False
+            user.is_verified = False
+            user.is_locked = False
+            user.lock_until = None
+            user.failed_login_attempts = 0
+            user.set_unusable_password()
+            user.save(
+                update_fields=[
+                    "email",
+                    "username",
+                    "full_name",
+                    "password",
+                    "is_active",
+                    "is_verified",
+                    "is_locked",
+                    "lock_until",
+                    "failed_login_attempts",
+                    "updated_at",
+                ]
+            )

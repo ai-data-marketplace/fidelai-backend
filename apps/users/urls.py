@@ -1,6 +1,8 @@
 from django.urls import path
 
 from apps.users.views import (
+	ChangePasswordView,
+	DeleteAccountView,
 	ForgotPasswordView,
 	ApproveRoleApplicationView,
 	AdminUserListView,
@@ -42,4 +44,6 @@ urlpatterns = [
 	path("token/verify/", TokenVerifyView.as_view(), name="token-verify"),
 	path("forgot-password/", ForgotPasswordView.as_view(), name="auth-forgot-password"),
 	path("reset-password/", ResetPasswordView.as_view(), name="auth-reset-password"),
+	path("change-password/", ChangePasswordView.as_view(), name="auth-change-password"),
+	path("delete-account/", DeleteAccountView.as_view(), name="auth-delete-account"),
 ]

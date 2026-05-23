@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.serializers import (
+	ChangePasswordSerializer,
+	DeleteAccountSerializer,
 	ForgotPasswordSerializer,
 	LoginSerializer,
 	RegisterSerializer,
@@ -166,6 +168,45 @@ class ResetPasswordView(APIView):
 			return Response({"message": exc.message}, status=exc.status_code)
 
 		return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)
+
+
+class ChangePasswordView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(request=ChangePasswordSerializer)
+	def post(self, request):
+		serializer = ChangePasswordSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+
+		try:
+			AuthService.change_password(
+				user=request.user,
+				current_password=serializer.validated_data["current_password"],
+				new_password=serializer.validated_data["new_password"],
+			)
+		except AuthServiceError as exc:
+			return Response({"message": exc.message}, status=exc.status_code)
+
+		return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
+
+
+class DeleteAccountView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(request=DeleteAccountSerializer)
+	def post(self, request):
+		serializer = DeleteAccountSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+
+		try:
+			AuthService.delete_account(
+				user=request.user,
+				password=serializer.validated_data["password"],
+			)
+		except AuthServiceError as exc:
+			return Response({"message": exc.message}, status=exc.status_code)
+
+		return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
 
 
 class MeView(APIView):

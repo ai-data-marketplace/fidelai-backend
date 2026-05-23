@@ -47,6 +47,22 @@ class ResetPasswordSerializer(serializers.Serializer):
         return value
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        try:
+            validate_password_strength(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        return value
+
+
 class UserSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
     email = serializers.EmailField(read_only=True)
@@ -122,6 +138,8 @@ __all__ = [
     "LoginSerializer",
     "ForgotPasswordSerializer",
     "ResetPasswordSerializer",
+    "ChangePasswordSerializer",
+    "DeleteAccountSerializer",
     "UserSerializer",
     "RoleApplicationAdminSerializer",
     "RoleApplicationUserSummarySerializer",
