@@ -16,6 +16,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework import filters
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -89,6 +90,8 @@ class MySubmissionsView(ListAPIView):
 
     permission_classes = [IsAuthenticated]
     serializer_class = RawDocumentListSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["title"]
 
     @extend_schema(
         summary="List my document submissions",
