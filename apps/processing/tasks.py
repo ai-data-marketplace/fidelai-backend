@@ -21,7 +21,7 @@ from .services.task_assignment_service import TaskAssignmentService
 from .services.consensus_service import ConsensusPipelineService
 from .services.expert_task_creation_service import ExpertTaskCreationService
 from .services.expert_task_assignment_service import ExpertTaskAssignmentService
-
+from .services.ai_qc_service import AIQualityCheckService
 
 logger = logging.getLogger(__name__)
 
@@ -320,3 +320,11 @@ def DispatchPendingExpertTaskAssignments(batch_size: int = 50):
         result.get("errors", 0),
     )
     return result
+
+
+@shared_task
+def DispatchPendingAIQualityChecks(batch_size: int = 100):
+    """Run AI Quality Control on all pending chunks."""
+    processed = AIQualityCheckService().process_pending_chunks(batch_size=batch_size)
+    logger.info(f"AI QC dispatch completed: processed={processed}")
+    return {"processed": processed}

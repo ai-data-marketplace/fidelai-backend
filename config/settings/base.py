@@ -224,6 +224,11 @@ CELERY_BEAT_SCHEDULE = {
             CELERY_DATASET_AGGREGATION_PRICE,
         ),
     },
+    'dispatch-pending-ai-quality-checks': {
+        'task': 'apps.processing.tasks.DispatchPendingAIQualityChecks',
+        'schedule': crontab(minute='*/10'),
+        'args': (100,),
+    },
 }
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

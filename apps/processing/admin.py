@@ -48,21 +48,23 @@ class AIQualityCheckAdmin(admin.ModelAdmin):
 	list_display = (
 		"id",
 		"chunk",
-		"domain_match",
-		"is_amharic",
-		"readability",
-		"safety_label",
-		"confidence",
+		"predicted_language",
+		"language_confidence",
+		"predicted_domain",
+		"domain_confidence",
+		"predicted_readability",
+		"readability_confidence",
+		"overall_confidence_score",
+		"requires_manual_review",
 		"model_name",
 		"model_version",
 		"processed_at",
 	)
 	list_filter = (
-		"domain_match",
-		"is_amharic",
-		"readability",
-		"safety_label",
-		"confidence",
+		"predicted_language",
+		"predicted_domain",
+		"predicted_readability",
+		"requires_manual_review",
 		"processed_at",
 	)
 	search_fields = ("id", "chunk__id", "model_name", "model_version")
