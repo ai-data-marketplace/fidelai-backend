@@ -35,3 +35,17 @@ def send_password_reset_email(user, reset_link):
         [user.email],
         fail_silently=False,
     )
+
+
+def send_notification_email(user, subject: str, message: str):
+    """Send a plain-text notification email to the user.
+
+    Thin wrapper around Django's `send_mail` for notifications.
+    """
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )

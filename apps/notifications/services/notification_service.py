@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from apps.notifications.models import Notification, NotificationTemplate, NotificationTypeChoices
+from core.utils.email import send_notification_email
 
 
 def _json_safe(value):
@@ -47,6 +48,18 @@ def send_notification(
 
     metadata = _json_safe(context)
 
+    # load user preferences (minimal shape expected):
+    # { "email_notification": bool, "categories": {"account": bool, ...} }
+    prefs = getattr(getattr(user, "userprofile", None), "notification_preferences", {}) or {}
+    categories_prefs = prefs.get("categories", {})
+    # category in template is one of 'system','tasks','marketplace','account'
+    category_enabled = categories_prefs.get(template.category, True)
+    if not category_enabled:
+        return None
+
+    # decide whether email is allowed: either user enabled it or caller explicitly requested
+    email_allowed = bool(prefs.get("email_notification", False) or send_email)
+
     exists = Notification.objects.filter(
         user=user,
         notification_type=notification_type,
@@ -71,9 +84,15 @@ def send_notification(
         email_sent=False,
     )
 
-    if send_email:
-        notification.email_sent = True
-        notification.save(update_fields=["email_sent"])
+    # send email if allowed
+    if email_allowed:
+        try:
+            send_notification_email(user, title, message)
+            notification.email_sent = True
+            notification.save(update_fields=["email_sent"])
+        except Exception:
+            # don't crash notification creation if email fails; leave email_sent=False
+            pass
 
     return notification
 
