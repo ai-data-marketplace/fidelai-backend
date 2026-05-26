@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class AIQualityCheckService:
     _model_instance = None
     _model_name = "amanfisseha/multihead-rasyosef-amharic"
-    _model_version = "1.0"  # Update if you have versioning info
+    _model_version = "1.0"  
 
     @classmethod
     def get_model(cls):
@@ -41,7 +41,6 @@ class AIQualityCheckService:
     def _process_single_chunk(self, chunk):
         from django.db import IntegrityError
         with transaction.atomic():
-            # Skip if already processed
             if hasattr(chunk, "ai_quality_check"):
                 return
             preds = self.run_model_inference(chunk.text)
@@ -71,7 +70,10 @@ class AIQualityCheckService:
                 processed_at=timezone.now(),
             )
             chunk.quality_score = quality_score
-            chunk.status = ChunkStatusChoices.AI_PROCESSED
+            if read_conf < 0.75:
+                chunk.status = ChunkStatusChoices.REJECTED
+            else:
+                chunk.status = ChunkStatusChoices.AI_PROCESSED
             chunk.save(update_fields=["quality_score", "status"])
 
     def run_model_inference(self, text):
@@ -95,7 +97,6 @@ class AIQualityCheckService:
             return True
         if chunk.text is not None and len(chunk.text.strip()) < 20:
             return True
-        # Suspicious unicode: control chars, excessive symbols
         import re
         if chunk.text and re.search(r"[\u202e\u202d\u200b\u200e\u200f\ufffd]", chunk.text):
             return True
