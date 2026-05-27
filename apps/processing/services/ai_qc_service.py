@@ -18,13 +18,17 @@ class AIQualityCheckService:
     @classmethod
     def get_qc_model(cls):
         if cls._qc_model_instance is None:
+            logger.info("Loading AI QC model: %s", cls._qc_model_name)
             cls._qc_model_instance = TextQualityModel(cls._qc_model_name)
+            logger.info("AI QC model loaded: %s", cls._qc_model_name)
         return cls._qc_model_instance
 
     @classmethod
     def get_safety_model(cls):
         if cls._safety_model_instance is None:
+            logger.info("Loading safety model: %s", cls._safety_model_name)
             cls._safety_model_instance = AmharicSafetyModel(cls._safety_model_name)
+            logger.info("Safety model loaded: %s", cls._safety_model_name)
         return cls._safety_model_instance
 
     def process_pending_chunks(self, batch_size=100):
@@ -33,6 +37,12 @@ class AIQualityCheckService:
             .exclude(text__isnull=True)
             .exclude(text__exact="")
             .select_related("extracted_document")
+        )
+        total_pending = qs.count()
+        logger.info(
+            "AI QC batch started: pending_chunks=%s batch_size=%s",
+            total_pending,
+            batch_size,
         )
         processed = 0
         for chunk in qs.iterator(chunk_size=batch_size):
@@ -44,6 +54,11 @@ class AIQualityCheckService:
                 chunk.metadata = chunk.metadata or {}
                 chunk.metadata["ai_qc_error"] = str(e)
                 chunk.save(update_fields=["metadata"])
+        logger.info(
+            "AI QC batch completed: processed=%s pending_at_start=%s",
+            processed,
+            total_pending,
+        )
         return processed
 
     def _process_single_chunk(self, chunk):
@@ -66,6 +81,13 @@ class AIQualityCheckService:
             safety = safety_output["label"]
             safety_conf = float(safety_output["score"])
             quality_score = self.compute_quality_score(lang_conf, dom_conf, read_conf)
+            status = self.determine_chunk_status(
+                lang_conf=lang_conf,
+                dom_conf=dom_conf,
+                read_conf=read_conf,
+                safety_label=safety,
+                safety_conf=safety_conf,
+            )
 
             AIQualityCheck.objects.create(
                 chunk=chunk,
@@ -84,14 +106,22 @@ class AIQualityCheckService:
                 processed_at=timezone.now(),
             )
             chunk.quality_score = quality_score
-            chunk.status = self.determine_chunk_status(
-                lang_conf=lang_conf,
-                dom_conf=dom_conf,
-                read_conf=read_conf,
-                safety_label=safety,
-                safety_conf=safety_conf,
-            )
+            chunk.status = status
             chunk.save(update_fields=["quality_score", "status"])
+            logger.info(
+                "AI QC processed chunk=%s status=%s quality_score=%.4f language=%s:%.4f domain=%s:%.4f readability=%s:%.4f safety=%s:%.4f",
+                chunk.id,
+                status,
+                quality_score,
+                lang,
+                lang_conf,
+                dom,
+                dom_conf,
+                read,
+                read_conf,
+                safety,
+                safety_conf,
+            )
 
     def run_qc_model_inference(self, text):
         try:
