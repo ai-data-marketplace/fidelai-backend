@@ -132,7 +132,7 @@ class TaskCreationService:
             ExtractedDocument.objects.select_related("raw_document", "raw_document__user")
             .prefetch_related(
                 "raw_document__files",
-                Prefetch("chunks", queryset=Chunk.objects.filter(status=ChunkStatusChoices.AI_PROCESSED).order_by("order_index")),
+                Prefetch("chunks", queryset=Chunk.objects.filter(status=ChunkStatusChoices.AI_LOW_CONFIDENCE).order_by("order_index")),
             )
             .filter(pk=extracted_document_id)
         )
@@ -154,9 +154,9 @@ class TaskCreationService:
                 f"RawDocument {extracted_document.raw_document_id} is missing domain information"
             )
 
-        chunks = list(extracted_document.chunks.filter(status=ChunkStatusChoices.AI_PROCESSED).order_by("order_index"))
+        chunks = list(extracted_document.chunks.filter(status=ChunkStatusChoices.AI_LOW_CONFIDENCE).order_by("order_index"))
         if not chunks:
-            raise NoChunksFoundError(f"No AI_PROCESSED chunks found for ExtractedDocument {extracted_document_id}")
+            raise NoChunksFoundError(f"No AI_LOW_CONFIDENCE chunks found for ExtractedDocument {extracted_document_id}")
 
         return extracted_document, chunks
 

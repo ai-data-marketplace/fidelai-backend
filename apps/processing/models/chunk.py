@@ -36,7 +36,7 @@ class TaskAssignmentStatusChoices(models.TextChoices):
 
 class ChunkStatusChoices(models.TextChoices):
     PENDING = "pending", "Pending"
-    AI_PROCESSED = "ai_processed", "AI Processed"
+    AI_LOW_CONFIDENCE = "ai_low_confidence", "AI Low Confidence"
     IN_ANNOTATION = "in_annotation", "In Annotation"
     ANNOTATED = "annotated", "Annotated"
     CONSENSUS_READY = "consensus_ready", "Consensus Ready"

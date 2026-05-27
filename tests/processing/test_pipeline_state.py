@@ -87,16 +87,16 @@ class ProcessingPipelineStateTests(TestCase):
         self.assertEqual(extracted_document.chunking_status, ExtractedDocumentChunkingStatusChoices.CHUNKED)
         self.assertEqual(extracted_document.raw_document.review_status, ReviewStatusChoices.APPROVED)
 
-    def test_task_creation_uses_only_pending_chunks(self):
+    def test_task_creation_uses_only_ai_low_confidence_chunks(self):
         extracted_document = self._create_extracted_document(chunking_status=ExtractedDocumentChunkingStatusChoices.CHUNKED)
-        pending_chunk = Chunk.objects.create(
+        low_confidence_chunk = Chunk.objects.create(
             extracted_document=extracted_document,
-            status=ChunkStatusChoices.PENDING,
-            text="pending chunk",
+            status=ChunkStatusChoices.AI_LOW_CONFIDENCE,
+            text="low confidence chunk",
             order_index=0,
             char_start=0,
-            char_end=13,
-            token_count=2,
+            char_end=20,
+            token_count=3,
             metadata={},
         )
         annotated_chunk = Chunk.objects.create(
@@ -116,7 +116,7 @@ class ProcessingPipelineStateTests(TestCase):
         task = AnnotationTask.objects.get(extracted_document=extracted_document)
         self.assertEqual(task.total_chunks, 1)
         task_chunk_ids = list(TaskChunk.objects.filter(task=task).values_list("chunk_id", flat=True))
-        self.assertEqual(task_chunk_ids, [pending_chunk.id])
+        self.assertEqual(task_chunk_ids, [low_confidence_chunk.id])
         self.assertNotIn(annotated_chunk.id, task_chunk_ids)
 
     def test_task_creation_rejects_non_chunked_document(self):

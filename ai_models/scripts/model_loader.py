@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModel, AutoConfig
+from transformers import pipeline
 from huggingface_hub import snapshot_download
 
 DOMAIN_LABELS = ["Education", "Health", "Religion", "Politics", "Law", "General", "Finance"]
@@ -114,6 +115,24 @@ class TextQualityModel:
             "language": {"label": lang_label, "confidence": lang_conf},
             "readability": {"label": read_label, "confidence": read_conf},
             "domain": {"label": DOMAIN_LABELS[domain_pred], "confidence": domain_conf}
+        }
+
+
+class AmharicSafetyModel:
+    def __init__(self, repo_id: str = "uhhlt/amharic-hate-speech"):
+        self.classifier = pipeline("text-classification", model=repo_id)
+
+    def predict(self, text: str) -> dict:
+        if not text.strip():
+            return {"error": "Empty input text"}
+
+        result = self.classifier(text)
+        if isinstance(result, list) and result:
+            result = result[0]
+
+        return {
+            "label": result["label"],
+            "score": float(result["score"]),
         }
 
 

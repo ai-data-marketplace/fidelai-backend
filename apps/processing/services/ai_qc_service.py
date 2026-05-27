@@ -3,21 +3,29 @@ from django.db import transaction
 from django.utils import timezone
 from apps.processing.models import Chunk, ChunkStatusChoices
 from apps.processing.models.ai import AIQualityCheck
-from ai_models.scripts.model_loader import TextQualityModel
+from ai_models.scripts.model_loader import AmharicSafetyModel, TextQualityModel
 
 logger = logging.getLogger(__name__)
 
 
 class AIQualityCheckService:
-    _model_instance = None
-    _model_name = "amanfisseha/multihead-rasyosef-amharic"
+    _qc_model_instance = None
+    _safety_model_instance = None
+    _qc_model_name = "amanfisseha/multihead-rasyosef-amharic"
+    _safety_model_name = "uhhlt/amharic-hate-speech"
     _model_version = "1.0"  
 
     @classmethod
-    def get_model(cls):
-        if cls._model_instance is None:
-            cls._model_instance = TextQualityModel(cls._model_name)
-        return cls._model_instance
+    def get_qc_model(cls):
+        if cls._qc_model_instance is None:
+            cls._qc_model_instance = TextQualityModel(cls._qc_model_name)
+        return cls._qc_model_instance
+
+    @classmethod
+    def get_safety_model(cls):
+        if cls._safety_model_instance is None:
+            cls._safety_model_instance = AmharicSafetyModel(cls._safety_model_name)
+        return cls._safety_model_instance
 
     def process_pending_chunks(self, batch_size=100):
         qs = (
@@ -39,22 +47,27 @@ class AIQualityCheckService:
         return processed
 
     def _process_single_chunk(self, chunk):
-        from django.db import IntegrityError
         with transaction.atomic():
             if hasattr(chunk, "ai_quality_check"):
                 return
-            preds = self.run_model_inference(chunk.text)
-            if preds is None:
-                raise RuntimeError("Model inference failed or returned None")
-            lang = preds["language"]["label"]
-            lang_conf = float(preds["language"]["confidence"])
-            dom = preds["domain"]["label"]
-            dom_conf = float(preds["domain"]["confidence"])
-            read = preds["readability"]["label"]
-            read_conf = float(preds["readability"]["confidence"])
+            qc_output = self.run_qc_model_inference(chunk.text)
+            if qc_output is None:
+                raise RuntimeError("QC model inference failed or returned None")
+            safety_output = self.run_safety_model_inference(chunk.text)
+            if safety_output is None:
+                raise RuntimeError("Safety model inference failed or returned None")
+
+            lang = qc_output["language"]["label"]
+            lang_conf = float(qc_output["language"]["confidence"])
+            dom = qc_output["domain"]["label"]
+            dom_conf = float(qc_output["domain"]["confidence"])
+            read = qc_output["readability"]["label"]
+            read_conf = float(qc_output["readability"]["confidence"])
+            safety = safety_output["label"]
+            safety_conf = float(safety_output["score"])
             quality_score = self.compute_quality_score(lang_conf, dom_conf, read_conf)
-            manual_review = self.requires_manual_review(chunk, lang_conf, dom_conf, read_conf)
-            aiqc = AIQualityCheck.objects.create(
+
+            AIQualityCheck.objects.create(
                 chunk=chunk,
                 predicted_language=lang,
                 language_confidence=lang_conf,
@@ -62,26 +75,38 @@ class AIQualityCheckService:
                 domain_confidence=dom_conf,
                 predicted_readability=read,
                 readability_confidence=read_conf,
-                overall_confidence_score=quality_score,
-                requires_manual_review=manual_review,
-                model_name=self._model_name,
+                predicted_safety=safety,
+                safety_confidence=safety_conf,
+                model_name=f"{self._qc_model_name}; {self._safety_model_name}",
                 model_version=self._model_version,
-                raw_predictions=preds,
+                raw_qc_output=qc_output,
+                raw_safety_output=safety_output,
                 processed_at=timezone.now(),
             )
             chunk.quality_score = quality_score
-            if read_conf < 0.75:
-                chunk.status = ChunkStatusChoices.REJECTED
-            else:
-                chunk.status = ChunkStatusChoices.AI_PROCESSED
+            chunk.status = self.determine_chunk_status(
+                lang_conf=lang_conf,
+                dom_conf=dom_conf,
+                read_conf=read_conf,
+                safety_label=safety,
+                safety_conf=safety_conf,
+            )
             chunk.save(update_fields=["quality_score", "status"])
 
-    def run_model_inference(self, text):
+    def run_qc_model_inference(self, text):
         try:
-            model = self.get_model()
+            model = self.get_qc_model()
             return model.predict(text)
         except Exception as e:
-            logger.error(f"Model inference error: {e}")
+            logger.error(f"QC model inference error: {e}")
+            return None
+
+    def run_safety_model_inference(self, text):
+        try:
+            model = self.get_safety_model()
+            return model.predict(text)
+        except Exception as e:
+            logger.error(f"Safety model inference error: {e}")
             return None
 
     @staticmethod
@@ -90,16 +115,13 @@ class AIQualityCheckService:
         return max(0.0, min(1.0, score))
 
     @staticmethod
-    def requires_manual_review(chunk, lang_conf, dom_conf, read_conf):
-        if lang_conf < 0.70 or read_conf < 0.60 or dom_conf < 0.60:
-            return True
-        if chunk.token_count is not None and chunk.token_count < 5:
-            return True
-        if chunk.text is not None and len(chunk.text.strip()) < 20:
-            return True
-        import re
-        if chunk.text and re.search(r"[\u202e\u202d\u200b\u200e\u200f\ufffd]", chunk.text):
-            return True
-        if chunk.text and sum(1 for c in chunk.text if not c.isprintable()) > 0:
-            return True
-        return False
+    def determine_chunk_status(*, lang_conf, dom_conf, read_conf, safety_label, safety_conf):
+        if safety_label in {"hate", "offensive"}:
+            return ChunkStatusChoices.REJECTED
+
+        qc_is_high_confidence = lang_conf >= 0.90 and dom_conf >= 0.90 and read_conf >= 0.90
+        safety_is_clear = safety_label == "normal" and safety_conf >= 0.75
+        if qc_is_high_confidence and safety_is_clear:
+            return ChunkStatusChoices.APPROVED
+
+        return ChunkStatusChoices.AI_LOW_CONFIDENCE

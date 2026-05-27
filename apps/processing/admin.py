@@ -54,8 +54,8 @@ class AIQualityCheckAdmin(admin.ModelAdmin):
 		"domain_confidence",
 		"predicted_readability",
 		"readability_confidence",
-		"overall_confidence_score",
-		"requires_manual_review",
+		"predicted_safety",
+		"safety_confidence",
 		"model_name",
 		"model_version",
 		"processed_at",
@@ -64,7 +64,7 @@ class AIQualityCheckAdmin(admin.ModelAdmin):
 		"predicted_language",
 		"predicted_domain",
 		"predicted_readability",
-		"requires_manual_review",
+		"predicted_safety",
 		"processed_at",
 	)
 	search_fields = ("id", "chunk__id", "model_name", "model_version")
