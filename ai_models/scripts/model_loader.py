@@ -126,7 +126,7 @@ class AmharicSafetyModel:
         if not text.strip():
             return {"error": "Empty input text"}
 
-        result = self.classifier(text)
+        result = self.classifier(text, truncation=True, max_length=512)
         if isinstance(result, list) and result:
             result = result[0]
 

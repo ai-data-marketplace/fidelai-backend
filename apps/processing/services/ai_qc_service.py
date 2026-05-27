@@ -36,7 +36,7 @@ class AIQualityCheckService:
             Chunk.objects.filter(status=ChunkStatusChoices.PENDING)
             .exclude(text__isnull=True)
             .exclude(text__exact="")
-            .select_related("extracted_document")
+            .select_related("extracted_document", "extracted_document__raw_document")
         )
         total_pending = qs.count()
         logger.info(
@@ -44,16 +44,25 @@ class AIQualityCheckService:
             total_pending,
             batch_size,
         )
+        chunk_ids = list(qs.values_list("id", flat=True))
         processed = 0
-        for chunk in qs.iterator(chunk_size=batch_size):
+        for chunk_id in chunk_ids:
+            chunk = None
             try:
+                chunk = (
+                    Chunk.objects.select_related("extracted_document", "extracted_document__raw_document")
+                    .get(id=chunk_id)
+                )
                 self._process_single_chunk(chunk)
                 processed += 1
             except Exception as e:
-                logger.error(f"AI QC failed for chunk {chunk.id}: {e}")
-                chunk.metadata = chunk.metadata or {}
-                chunk.metadata["ai_qc_error"] = str(e)
-                chunk.save(update_fields=["metadata"])
+                logger.error(f"AI QC failed for chunk {chunk_id}: {e}")
+                if chunk is None:
+                    chunk = Chunk.objects.filter(id=chunk_id).first()
+                if chunk is not None:
+                    chunk.metadata = chunk.metadata or {}
+                    chunk.metadata["ai_qc_error"] = str(e)
+                    chunk.save(update_fields=["metadata"])
         logger.info(
             "AI QC batch completed: processed=%s pending_at_start=%s",
             processed,
@@ -82,11 +91,15 @@ class AIQualityCheckService:
             safety_conf = float(safety_output["score"])
             quality_score = self.compute_quality_score(lang_conf, dom_conf, read_conf)
             status = self.determine_chunk_status(
+                language_label=lang,
                 lang_conf=lang_conf,
+                domain_label=dom,
                 dom_conf=dom_conf,
+                readability_label=read,
                 read_conf=read_conf,
                 safety_label=safety,
                 safety_conf=safety_conf,
+                expected_domain=getattr(chunk.extracted_document.raw_document, "domain", None),
             )
 
             AIQualityCheck.objects.create(
@@ -145,13 +158,50 @@ class AIQualityCheckService:
         return max(0.0, min(1.0, score))
 
     @staticmethod
-    def determine_chunk_status(*, lang_conf, dom_conf, read_conf, safety_label, safety_conf):
+    def determine_chunk_status(
+        *,
+        language_label,
+        lang_conf,
+        domain_label,
+        dom_conf,
+        readability_label,
+        read_conf,
+        safety_label,
+        safety_conf,
+        expected_domain=None,
+    ):
         if safety_label in {"hate", "offensive"}:
             return ChunkStatusChoices.REJECTED
 
+        qc_has_rejected_labels = (
+            language_label == "Other/Mixed"
+            and readability_label == "Broken/OCR"
+            and not AIQualityCheckService.domain_matches_expected(domain_label, expected_domain)
+        )
+        if qc_has_rejected_labels:
+            return ChunkStatusChoices.REJECTED
+
+        qc_has_approved_labels = (
+            language_label == "Amharic"
+            and readability_label == "Clear"
+            and AIQualityCheckService.domain_matches_expected(domain_label, expected_domain)
+        )
         qc_is_high_confidence = lang_conf >= 0.90 and dom_conf >= 0.90 and read_conf >= 0.90
         safety_is_clear = safety_label == "normal" and safety_conf >= 0.75
-        if qc_is_high_confidence and safety_is_clear:
+        if qc_has_approved_labels and qc_is_high_confidence and safety_is_clear:
             return ChunkStatusChoices.APPROVED
 
         return ChunkStatusChoices.AI_LOW_CONFIDENCE
+
+    @staticmethod
+    def domain_matches_expected(predicted_domain, expected_domain):
+        if not expected_domain:
+            return True
+
+        predicted = str(predicted_domain).strip().lower().replace("_", " ")
+        expected = str(expected_domain).strip().lower().replace("_", " ")
+
+        if predicted == expected:
+            return True
+
+        return {predicted, expected} == {"general", "other"}

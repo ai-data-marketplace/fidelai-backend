@@ -108,3 +108,47 @@ class AIQualityCheckServiceTests(TestCase):
 
         chunk.refresh_from_db()
         self.assertEqual(chunk.status, ChunkStatusChoices.AI_LOW_CONFIDENCE)
+
+    def test_routes_high_confidence_bad_readability_label_to_ai_low_confidence(self):
+        chunk = self._chunk()
+        qc_output = self._qc_output(language=0.98, domain=0.98, readability=0.98)
+        qc_output["readability"]["label"] = "Broken/OCR"
+
+        self._process_with_outputs(
+            chunk,
+            qc_output,
+            {"label": "normal", "score": 0.90},
+        )
+
+        chunk.refresh_from_db()
+        self.assertEqual(chunk.status, ChunkStatusChoices.AI_LOW_CONFIDENCE)
+
+    def test_routes_high_confidence_wrong_domain_label_to_ai_low_confidence(self):
+        chunk = self._chunk()
+        qc_output = self._qc_output(language=0.98, domain=0.98, readability=0.98)
+        qc_output["domain"]["label"] = "Education"
+
+        self._process_with_outputs(
+            chunk,
+            qc_output,
+            {"label": "normal", "score": 0.90},
+        )
+
+        chunk.refresh_from_db()
+        self.assertEqual(chunk.status, ChunkStatusChoices.AI_LOW_CONFIDENCE)
+
+    def test_rejects_when_language_readability_and_domain_labels_are_all_bad(self):
+        chunk = self._chunk()
+        qc_output = self._qc_output(language=0.98, domain=0.98, readability=0.98)
+        qc_output["language"]["label"] = "Other/Mixed"
+        qc_output["readability"]["label"] = "Broken/OCR"
+        qc_output["domain"]["label"] = "Education"
+
+        self._process_with_outputs(
+            chunk,
+            qc_output,
+            {"label": "normal", "score": 0.90},
+        )
+
+        chunk.refresh_from_db()
+        self.assertEqual(chunk.status, ChunkStatusChoices.REJECTED)
