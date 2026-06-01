@@ -46,6 +46,7 @@ services:
   - type: redis
     name: fidelai-redis
     plan: free
+    ipAllowList: []
 
   # -------------------------
   # Celery Worker
