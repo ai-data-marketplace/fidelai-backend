@@ -9,7 +9,7 @@ class DomainChoices(models.TextChoices):
     EDUCATION = "education", "Education"
     LAW = "law", "Law"
     FINANCE = "finance", "Finance"
-    NEWS = "news", "News"
+    POLITICS = "politics", "Politics"
     RELIGION = "religion", "Religion"
     GENERAL = "general", "General"
 

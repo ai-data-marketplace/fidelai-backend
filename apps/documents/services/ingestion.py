@@ -30,13 +30,20 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-ALLOWED_EXTENSIONS: frozenset[str] = frozenset({"pdf", "docx", "txt"})
+ALLOWED_EXTENSIONS: frozenset[str] = frozenset({"pdf", "docx", "txt", "png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"})
 MAX_FILE_SIZE_BYTES: int = 50 * 1024 * 1024  # 50 MB
 
 MIME_TYPE_MAP: dict[str, str] = {
     "pdf": "application/pdf",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "txt": "text/plain",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+    "bmp": "image/bmp",
+    "webp": "image/webp",
 }
 
 

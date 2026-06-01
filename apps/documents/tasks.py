@@ -20,7 +20,7 @@ from apps.documents.models import ReviewStatusChoices, ProcessingStatusChoices
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
+ALLOWED_EXTENSIONS = {"pdf", "docx", "txt", "png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"}
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
 

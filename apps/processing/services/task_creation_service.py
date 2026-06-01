@@ -181,7 +181,7 @@ class TaskCreationService:
             "education": "educational transcription segments",
             "law": "legal transcription segments",
             "finance": "financial transcription segments",
-            "news": "news transcription segments",
+            "politics": "political transcription segments",
             "religion": "religious transcription segments",
             "general": "General transcription segments",
         }
