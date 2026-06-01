@@ -53,7 +53,7 @@ class WithdrawalRequestCreateSerializer(serializers.Serializer):
     bank_code = serializers.CharField(max_length=20)
     account_number = serializers.CharField(max_length=50)
     account_name = serializers.CharField(max_length=255)
-    amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0.01)
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
 
     def validate(self, attrs):
         """Validate that user can initiate withdrawal with this amount."""
