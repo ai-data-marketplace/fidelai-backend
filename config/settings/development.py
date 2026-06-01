@@ -8,3 +8,4 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 if 'debug_toolbar' in INSTALLED_APPS:
     MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
+

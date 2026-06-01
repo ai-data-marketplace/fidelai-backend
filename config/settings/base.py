@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
-
+import dj_database_url
 import environ
 from celery.schedules import crontab
 
@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -72,12 +73,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = env('DATABASE_URL', default=None)
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -131,30 +142,50 @@ SPECTACULAR_SETTINGS = {
 AUTH_USER_MODEL = 'users.CustomUser'
 
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/1')
-CELERY_PROCESSING_BATCH_SIZE = env.int('CELERY_PROCESSING_BATCH_SIZE', default=25)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "Africa/Addis_Ababa"
+CELERY_ENABLE_UTC = False
+
+CELERY_PROCESSING_BATCH_SIZE = env.int(
+    'CELERY_PROCESSING_BATCH_SIZE', default=25)
 CELERY_CHUNKING_BATCH_SIZE = env.int('CELERY_CHUNKING_BATCH_SIZE', default=25)
-CELERY_TASK_CREATION_BATCH_SIZE = env.int('CELERY_TASK_CREATION_BATCH_SIZE', default=25)
+CELERY_TASK_CREATION_BATCH_SIZE = env.int(
+    'CELERY_TASK_CREATION_BATCH_SIZE', default=25)
 CELERY_MAX_CHUNKS_PER_TASK = env.int('CELERY_MAX_CHUNKS_PER_TASK', default=30)
-CELERY_CONSENSUS_BATCH_SIZE = env.int('CELERY_CONSENSUS_BATCH_SIZE', default=100)
-CELERY_EXPERT_TASK_BATCH_SIZE = env.int('CELERY_EXPERT_TASK_BATCH_SIZE', default=100)
-CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE = env.int('CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE', default=50)
-CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE = env.int('CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE', default=50)
-CELERY_NLP_CONSENSUS_BATCH_SIZE = env.int('CELERY_NLP_CONSENSUS_BATCH_SIZE', default=100)
-CELERY_DATASET_AGGREGATION_TITLE = env('CELERY_DATASET_AGGREGATION_TITLE', default='Auto-built NLP dataset')
+CELERY_CONSENSUS_BATCH_SIZE = env.int(
+    'CELERY_CONSENSUS_BATCH_SIZE', default=100)
+CELERY_EXPERT_TASK_BATCH_SIZE = env.int(
+    'CELERY_EXPERT_TASK_BATCH_SIZE', default=100)
+CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE = env.int(
+    'CELERY_EXPERT_TASK_ASSIGNMENT_BATCH_SIZE', default=50)
+CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE = env.int(
+    'CELERY_NLP_CANDIDATE_EXTRACTION_BATCH_SIZE', default=50)
+CELERY_NLP_CONSENSUS_BATCH_SIZE = env.int(
+    'CELERY_NLP_CONSENSUS_BATCH_SIZE', default=100)
+CELERY_DATASET_AGGREGATION_TITLE = env(
+    'CELERY_DATASET_AGGREGATION_TITLE', default='Auto-built NLP dataset')
 CELERY_DATASET_AGGREGATION_DESCRIPTION = env(
     'CELERY_DATASET_AGGREGATION_DESCRIPTION',
     default='Periodically aggregated dataset from approved NLP consensus results',
 )
-CELERY_DATASET_AGGREGATION_TASK_TYPE = env('CELERY_DATASET_AGGREGATION_TASK_TYPE', default='sentiment')
-CELERY_DATASET_AGGREGATION_DOMAINS = env('CELERY_DATASET_AGGREGATION_DOMAINS', default='')
+CELERY_DATASET_AGGREGATION_TASK_TYPE = env(
+    'CELERY_DATASET_AGGREGATION_TASK_TYPE', default='sentiment')
+CELERY_DATASET_AGGREGATION_DOMAINS = env(
+    'CELERY_DATASET_AGGREGATION_DOMAINS', default='')
 CELERY_DATASET_AGGREGATION_MIN_AGREEMENT_SCORE = env.float(
     'CELERY_DATASET_AGGREGATION_MIN_AGREEMENT_SCORE',
     default=0.8,
 )
-CELERY_DATASET_AGGREGATION_MAX_EXAMPLES = env.int('CELERY_DATASET_AGGREGATION_MAX_EXAMPLES', default=15000)
-CELERY_DATASET_AGGREGATION_BALANCE_LABELS = env.bool('CELERY_DATASET_AGGREGATION_BALANCE_LABELS', default=True)
-CELERY_DATASET_AGGREGATION_LICENSE_TYPE = env('CELERY_DATASET_AGGREGATION_LICENSE_TYPE', default='mit')
-CELERY_DATASET_AGGREGATION_PRICE = env.float('CELERY_DATASET_AGGREGATION_PRICE', default=0.0)
+CELERY_DATASET_AGGREGATION_MAX_EXAMPLES = env.int(
+    'CELERY_DATASET_AGGREGATION_MAX_EXAMPLES', default=15000)
+CELERY_DATASET_AGGREGATION_BALANCE_LABELS = env.bool(
+    'CELERY_DATASET_AGGREGATION_BALANCE_LABELS', default=True)
+CELERY_DATASET_AGGREGATION_LICENSE_TYPE = env(
+    'CELERY_DATASET_AGGREGATION_LICENSE_TYPE', default='mit')
+CELERY_DATASET_AGGREGATION_PRICE = env.float(
+    'CELERY_DATASET_AGGREGATION_PRICE', default=0.0)
 CELERY_BEAT_SCHEDULE = {
     'dispatch-pending-document-processing': {
         'task': 'apps.processing.tasks.DispatchPendingDocumentProcessing',
@@ -245,6 +276,7 @@ CHAPA_BASE_URL = env('CHAPA_BASE_URL', default='https://api.chapa.co/v1')
 CHAPA_DEFAULT_CURRENCY = env('CHAPA_DEFAULT_CURRENCY', default='ETB')
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
