@@ -12,6 +12,7 @@ services:
     name: fidelai-web
     runtime: python
     plan: free
+    pythonVersion: "3.10.11"
 
     buildCommand: './build.sh'
     startCommand: 'gunicorn config.wsgi:application'
@@ -51,6 +52,7 @@ services:
     name: fidelai-worker
     runtime: python
     plan: free
+    pythonVersion: "3.10.11"
 
     buildCommand: './build.sh'
     startCommand: 'celery -A config worker -l info'
@@ -80,6 +82,7 @@ services:
     name: fidelai-beat
     runtime: python
     plan: free
+    pythonVersion: "3.10.11"
 
     buildCommand: './build.sh'
     startCommand: 'celery -A config beat -l info'
