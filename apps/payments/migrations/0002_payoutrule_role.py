@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                     ("admin", "admin"),
                     ("unknown", "unknown"),
                 ],
-                default=django.utils.timezone.now,
+                default="unknown",
                 max_length=20,
             ),
             preserve_default=False,
