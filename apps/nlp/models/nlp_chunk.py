@@ -127,12 +127,12 @@ class NLPChunk(TimeStampedModel):
         ]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(char_end__gt=models.F("char_start")),
+                condition=models.Q(char_end__gt=models.F("char_start")),
                 name="nlp_chunk_char_end_gt_start",
                 violation_error_message="char_end must be greater than char_start"
             ),
             models.CheckConstraint(
-                check=models.Q(ai_confidence_score__isnull=True) | 
+                condition=models.Q(ai_confidence_score__isnull=True) | 
                       models.Q(ai_confidence_score__gte=0) & 
                       models.Q(ai_confidence_score__lte=1),
                 name="nlp_chunk_confidence_score_valid",

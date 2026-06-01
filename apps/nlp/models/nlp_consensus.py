@@ -80,13 +80,13 @@ class NLPConsensus(TimeStampedModel):
         ]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(agreement_score__gte=0) & 
+                condition=models.Q(agreement_score__gte=0) & 
                       models.Q(agreement_score__lte=1),
                 name="nlp_consensus_agreement_score_valid",
                 violation_error_message="agreement_score must be between 0 and 1"
             ),
             models.CheckConstraint(
-                check=models.Q(total_annotations__gt=0),
+                condition=models.Q(total_annotations__gt=0),
                 name="nlp_consensus_total_annotations_positive",
                 violation_error_message="total_annotations must be greater than 0"
             ),
