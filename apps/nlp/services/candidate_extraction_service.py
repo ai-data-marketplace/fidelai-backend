@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
@@ -58,7 +59,22 @@ class CandidateExtractionService:
 
     def __init__(self, model_name: Optional[str] = None, api_key: Optional[str] = None):
         self.model_name = model_name or os.getenv("GEMINI_MODEL_NAME")
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        
+        self.api_keys = []
+        if api_key:
+            self.api_keys.append(api_key)
+        else:
+            # Auto-detect any env variables starting with GEMINI_API_KEY
+            for k, v in os.environ.items():
+                if k.startswith("GEMINI_API_KEY") and v.strip():
+                    self.api_keys.append(v.strip())
+            
+        # Fallback to empty list, checked at call time
+        self.api_keys = list(set(self.api_keys))
+        self._key_index = 0
+        
+        # Configurable delay between requests to mitigate rate limits
+        self.request_delay = float(os.getenv("NLP_CANDIDATE_REQUEST_DELAY", "2.0"))
 
         # lazy import of gemini client
         self._gemini = None
@@ -106,6 +122,10 @@ class CandidateExtractionService:
                 processed += p
                 created += c
                 skipped += s
+                
+                # Apply delay to avoid rate limiting
+                if self.request_delay > 0:
+                    time.sleep(self.request_delay)
             except Exception as e:
                 # Log and continue
                 logger.exception("Failed processing chunk id=%s: %s", getattr(chunk, "id", None), str(e))
@@ -223,21 +243,34 @@ class CandidateExtractionService:
         except Exception as e:
             raise GeminiClientError("google.generativeai package not available; please install it") from e
 
-        if not self.api_key:
-            raise GeminiClientError("GEMINI_API_KEY not provided")
+        if not self.api_keys:
+            raise GeminiClientError("No GEMINI_API_KEY provided in environment")
         if not self.model_name:
             raise GeminiClientError("GEMINI_MODEL_NAME not provided")
 
-        try:
-            # Configure the API key
-            genai.configure(api_key=self.api_key)
-            
-            # Use the GenerativeModel API (current version)
-            model = genai.GenerativeModel(self.model_name)
-            response = model.generate_content(prompt)
-            return response
-        except Exception as e:
-            raise GeminiClientError(f"Gemini API call failed: {e}") from e
+        last_error = None
+        for _ in range(len(self.api_keys)):
+            try:
+                # Get the current key and rotate
+                current_api_key = self.api_keys[self._key_index]
+                self._key_index = (self._key_index + 1) % len(self.api_keys)
+                
+                # Configure the API key iteratively
+                genai.configure(api_key=current_api_key)
+                
+                # Use the GenerativeModel API (current version)
+                model = genai.GenerativeModel(self.model_name)
+                response = model.generate_content(prompt)
+                return response
+            except Exception as e:
+                safe_key = f"***{current_api_key[-4:]}" if current_api_key and len(current_api_key) > 4 else "unknown"
+                logger.warning("Gemini API call failed with key %s: %s. Retrying with next key...", safe_key, str(e))
+                last_error = e
+                # Apply delay before retrying with the next key to throttle attempts
+                if self.request_delay > 0:
+                    time.sleep(self.request_delay)
+                    
+        raise GeminiClientError(f"All {len(self.api_keys)} Gemini API keys failed. Last error: {last_error}") from last_error
 
     # ---------------------- Response parsing ----------------------
     def parse_response(self, response: Any) -> List[Candidate]:
