@@ -10,6 +10,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.users.models import CustomUser, RoleApplication, RoleApplicationStatusChoices, RoleChoices
 from apps.users.serializers.role_management import AdminUserListSerializer, RoleApplicationAdminSerializer
+from apps.notifications.services.notification_service import notify_role_approved, notify_role_rejected
 from core.permissions.processing import IsAdmin
 
 
@@ -108,6 +109,9 @@ class ApproveRoleApplicationView(_BaseRoleApplicationDecisionView):
             user.role = application.role_applied_for
             user.save(update_fields=["role", "updated_at"])
 
+        # Send notification and email after transaction commit
+        notify_role_approved(user=application.user, role=application.role_applied_for, send_email=True)
+
         return Response(RoleApplicationAdminSerializer(application).data, status=status.HTTP_200_OK)
 
 
@@ -138,6 +142,9 @@ class RejectRoleApplicationView(_BaseRoleApplicationDecisionView):
             application.reviewed_at = timezone.now()
             application.reviewed_by = request.user
             application.save(update_fields=["status", "reviewed_at", "reviewed_by", "updated_at"])
+
+        # Send notification and email after transaction commit
+        notify_role_rejected(user=application.user, role=application.role_applied_for, send_email=True)
 
         return Response(RoleApplicationAdminSerializer(application).data, status=status.HTTP_200_OK)
 

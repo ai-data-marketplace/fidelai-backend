@@ -138,18 +138,20 @@ def notify_account_verified(user):
         context={"full_name": user.full_name},
     )
 
-def notify_role_approved(user, role):
+def notify_role_approved(user, role, send_email: bool = False):
     return send_notification(
         user=user,
         notification_type=NotificationTypeChoices.ROLE_APPROVED,
         context={"role": role},
+        send_email=send_email,
     )
 
-def notify_role_rejected(user, role):
+def notify_role_rejected(user, role, send_email: bool = False):
     return send_notification(
         user=user,
         notification_type=NotificationTypeChoices.ROLE_REJECTED,
         context={"role": role},
+        send_email=send_email,
     )
 
 def notify_password_reset(user):
