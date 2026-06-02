@@ -2,10 +2,11 @@ from .base import *
 
 DEBUG = False
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS',default=[ 'fidelai.onrender.com',])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS',default=[ 'fidelai.duckdns.org','fidelai.onrender.com','119.12.167.136'])
 
 
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 STORAGES = {
     "staticfiles": {
